@@ -489,10 +489,17 @@ function LensView({ domainId, go }) {
       .catch(() => setPhase('error'));
   };
 
+  const [domainArticles, setDomainArticles] = React.useState([]);
+
   React.useEffect(() => {
     setPhase('idle');
     setResult(null);
     setQ('');
+    setDomainArticles([]);
+    fetch(`/api/articles?domain=${encodeURIComponent(d.id)}`)
+      .then(r => r.ok ? r.json() : { articles: [] })
+      .then(data => setDomainArticles(data.articles || []))
+      .catch(() => {});
   }, [domainId]);
 
   return (
@@ -552,12 +559,17 @@ function LensView({ domainId, go }) {
           <div className="lens-result" style={{ color: 'var(--warn)' }}>Query failed — check API config.</div>
         )}
 
-        <div className="panel-kicker" style={{ marginTop: '2rem' }}>CORE ARTICLES IN LENS</div>
+        <div className="panel-kicker" style={{ marginTop: '2rem' }}>ARTICLES IN {d.label.toUpperCase()}</div>
         <div className="lens-articles">
-          {['nightly-audit-architecture','gate-chain-restructuring','volatility-targeting-sharpe-finding','four-gate-decision-pipeline'].map(name => (
-            <button key={name} className="article-list-item" onClick={() => go('article', null, `wiki/domains/${d.id}/${name}.md`)}>
-              <div className="ali-title">{name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')}</div>
-              <div className="ali-path">wiki/domains/{d.id}/{name}.md</div>
+          {domainArticles.length === 0 && (
+            <div style={{ color: 'var(--fg-soft)', fontFamily: 'var(--mono)', fontSize: '12px', padding: '0.5rem 0' }}>
+              Loading…
+            </div>
+          )}
+          {domainArticles.map(a => (
+            <button key={a.path} className="article-list-item" onClick={() => go('article', null, a.path)}>
+              <div className="ali-title">{a.title}</div>
+              <div className="ali-path">{a.path}</div>
               <div className="ali-arrow">↗</div>
             </button>
           ))}

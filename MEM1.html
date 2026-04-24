@@ -57,6 +57,8 @@
       const [tweaksOpen, setTweaksOpen] = React.useState(false);
       const [tweaks, setTweaks] = React.useState(TWEAK_DEFAULTS);
       const [switching, setSwitching] = React.useState(false);
+      const [navHistory, setNavHistory] = React.useState([]);
+      const [articlePath, setArticlePath] = React.useState(null);
 
       React.useEffect(() => { try { localStorage.setItem('mem1:mode', mode); } catch {} }, [mode]);
       React.useEffect(() => { try { localStorage.setItem('mem1:view', view); } catch {} }, [view]);
@@ -97,13 +99,24 @@
         }, 280);
       };
 
-      const [articlePath, setArticlePath] = React.useState(null);
-
       const go = (v, d, ap) => {
+        setNavHistory(h => [...h, { view, domainId, articlePath }]);
         setView(v);
         if (d !== undefined && d !== null) setDomainId(d);
         if (ap !== undefined) setArticlePath(ap);
         window.scrollTo({ top: 0, behavior: 'instant' });
+      };
+
+      const goBack = () => {
+        setNavHistory(h => {
+          if (!h.length) return h;
+          const prev = h[h.length - 1];
+          setView(prev.view);
+          setDomainId(prev.domainId);
+          setArticlePath(prev.articlePath);
+          window.scrollTo({ top: 0, behavior: 'instant' });
+          return h.slice(0, -1);
+        });
       };
 
       const submodes = mode === 'work' ? WORK_SUBMODES : USE_SUBMODES;
@@ -165,6 +178,12 @@
             {/* Sub-mode tabs */}
             <div className="submode-bar">
               <div className="submode-bar-inner">
+                {navHistory.length > 0 && (
+                  <button className="submode-tab back-tab" onClick={goBack}>
+                    <span className="sm-label">← Back</span>
+                    <span className="sm-desc">{navHistory[navHistory.length-1]?.view || ''}</span>
+                  </button>
+                )}
                 {submodes.map(s => (
                   <button
                     key={s.id}

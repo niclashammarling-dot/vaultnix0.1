@@ -240,14 +240,42 @@ function ArticleView({ go, articlePath }) {
   const slug = pathParts[pathParts.length - 1]?.replace('.md', '') || '';
   const title = humanize(slug);
 
-  const renderMarkdown = (md) => {
-    if (window.marked) {
-      return <div className="article-md" dangerouslySetInnerHTML={{ __html: window.marked.parse(md) }} />;
-    }
-    return md.split('\n\n').map((p, i) => <p key={i}>{renderInline(p)}</p>);
-  };
+  const bodyRef = React.useRef(null);
 
   const stripFrontmatter = (md) => md.replace(/^---[\s\S]*?---\n/, '');
+
+  const processWikilinks = (md) =>
+    md.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, (_, slug, display) =>
+      `<a class="wl" data-slug="${slug.trim()}">${(display || slug).trim()}</a>`
+    );
+
+  React.useEffect(() => {
+    const el = bodyRef.current;
+    if (!el) return;
+    const handler = (e) => {
+      const a = e.target.closest('a.wl');
+      if (!a) return;
+      e.preventDefault();
+      const slug = a.dataset.slug;
+      fetch(`/api/resolve?slug=${encodeURIComponent(slug)}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(d => {
+          if (d && d.path) go('article', null, d.path);
+          else go('search', null, null); // fall back to search
+        })
+        .catch(() => go('search'));
+    };
+    el.addEventListener('click', handler);
+    return () => el.removeEventListener('click', handler);
+  });
+
+  const renderMarkdown = (md) => {
+    if (window.marked) {
+      const html = window.marked.parse(processWikilinks(md));
+      return <div ref={bodyRef} className="article-md" dangerouslySetInnerHTML={{ __html: html }} />;
+    }
+    return <div ref={bodyRef}>{md.split('\n\n').map((p, i) => <p key={i}>{renderInline(p)}</p>)}</div>;
+  };
 
   return (
     <div className="article-view">
@@ -329,7 +357,7 @@ function SearchView({ go }) {
             onChange={e => setQ(e.target.value)}
           />
           <span className="search-count mono">
-            {q.length < 2 ? 'type to search' : searching ? 'searching…' : `${results.length} results`}
+            {q.length < 2 ? 'type to search' : searching ? 'searching…' : `${results.length} results · by relevance`}
           </span>
         </div>
         <div className="search-filters">
