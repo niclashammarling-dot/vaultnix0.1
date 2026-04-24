@@ -471,6 +471,29 @@ function NavigatorView({ go }) {
 function LensView({ domainId, go }) {
   const d = DOMAINS.find(x => x.id === domainId) || DOMAINS[4];
   const [q, setQ] = React.useState('');
+  const [phase, setPhase] = React.useState('idle'); // idle | loading | done | error
+  const [result, setResult] = React.useState(null);
+
+  const submit = () => {
+    if (!q.trim() || phase === 'loading') return;
+    const fullQ = `Through the lens of ${d.label}: ${q}`;
+    setPhase('loading');
+    setResult(null);
+    fetch('/api/query', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ q: fullQ }),
+    })
+      .then(r => r.ok ? r.json() : Promise.reject())
+      .then(d => { setResult(d); setPhase('done'); })
+      .catch(() => setPhase('error'));
+  };
+
+  React.useEffect(() => {
+    setPhase('idle');
+    setResult(null);
+    setQ('');
+  }, [domainId]);
 
   return (
     <div className="use-view lens">
@@ -489,20 +512,52 @@ function LensView({ domainId, go }) {
       <div className="lens-body">
         <div className="lens-query">
           <div className="mono-label">ASK THROUGH THIS LENS</div>
-          <input
-            className="lens-input"
-            placeholder={`What would ${d.label} say about…?`}
-            value={q}
-            onChange={e => setQ(e.target.value)}
-          />
+          <div style={{ display: 'flex', gap: '8px', alignItems: 'flex-start' }}>
+            <input
+              className="lens-input"
+              style={{ flex: 1 }}
+              placeholder={`What would ${d.label} say about…?`}
+              value={q}
+              onChange={e => setQ(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) submit(); }}
+            />
+            <button className="btn-primary" onClick={submit} disabled={!q.trim() || phase === 'loading'} style={{ whiteSpace: 'nowrap' }}>
+              {phase === 'loading' ? 'Querying…' : 'Ask →'}
+            </button>
+          </div>
         </div>
 
-        <div className="panel-kicker">CORE ARTICLES IN LENS</div>
+        {phase === 'done' && result && (
+          <div className="lens-result">
+            <div className="panel-kicker">SYNTHESIS</div>
+            <div className="lens-synthesis">{result.synthesis}</div>
+            {result.gaps && result.gaps.length > 0 && (
+              <>
+                <div className="panel-kicker" style={{ marginTop: '1.5rem' }}>GAP HONESTY</div>
+                <ul className="gaps-list">
+                  {result.gaps.map((g, i) => <li key={i}>{g}</li>)}
+                </ul>
+              </>
+            )}
+            {result.surprise && (
+              <>
+                <div className="panel-kicker" style={{ marginTop: '1.5rem' }}>SURPRISE</div>
+                <div className="lens-synthesis">{result.surprise}</div>
+              </>
+            )}
+            <button className="btn-ghost" style={{ marginTop: '1rem' }} onClick={() => { setPhase('idle'); setResult(null); }}>← new question</button>
+          </div>
+        )}
+        {phase === 'error' && (
+          <div className="lens-result" style={{ color: 'var(--warn)' }}>Query failed — check API config.</div>
+        )}
+
+        <div className="panel-kicker" style={{ marginTop: '2rem' }}>CORE ARTICLES IN LENS</div>
         <div className="lens-articles">
           {['nightly-audit-architecture','gate-chain-restructuring','volatility-targeting-sharpe-finding','four-gate-decision-pipeline'].map(name => (
-            <button key={name} className="article-list-item" onClick={() => go('article')}>
+            <button key={name} className="article-list-item" onClick={() => go('article', null, `wiki/domains/${d.id}/${name}.md`)}>
               <div className="ali-title">{name.split('-').map(w => w[0].toUpperCase() + w.slice(1)).join(' ')}</div>
-              <div className="ali-path">wiki/{d.id}/{name}.md</div>
+              <div className="ali-path">wiki/domains/{d.id}/{name}.md</div>
               <div className="ali-arrow">↗</div>
             </button>
           ))}

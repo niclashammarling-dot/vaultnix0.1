@@ -183,9 +183,9 @@ function DomainView({ domainId, go }) {
           <div className="panel-kicker">CORE ARTICLES</div>
           <div className="article-list">
             {['nightly-audit-architecture', 'gate-chain-restructuring', 'volatility-targeting-sharpe-finding', 'four-gate-decision-pipeline', 'regime-matrix-sector-leaderboard'].map(name => (
-              <button key={name} className="article-list-item" onClick={() => go('article')}>
+              <button key={name} className="article-list-item" onClick={() => go('article', null, `wiki/domains/${d.id}/${name}.md`)}>
                 <div className="ali-title">{humanize(name)}</div>
-                <div className="ali-path">wiki/{d.id}/{name}.md</div>
+                <div className="ali-path">wiki/domains/{d.id}/{name}.md</div>
                 <div className="ali-arrow">↗</div>
               </button>
             ))}
@@ -219,76 +219,67 @@ function DomainView({ domainId, go }) {
 }
 
 // ─── ARTICLE ────────────────────────────────────────────────────────────────
-function ArticleView({ go }) {
-  const a = SAMPLE_ARTICLE;
+function ArticleView({ go, articlePath }) {
+  const [content, setContent] = React.useState(null);
+  const [loading, setLoading] = React.useState(false);
+  const [error, setError] = React.useState(null);
+
+  React.useEffect(() => {
+    if (!articlePath) return;
+    setLoading(true);
+    setError(null);
+    setContent(null);
+    fetch(`/api/file?path=${encodeURIComponent(articlePath)}`)
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { setContent(d); setLoading(false); })
+      .catch(e => { setError(e); setLoading(false); });
+  }, [articlePath]);
+
+  const pathParts = (articlePath || '').split('/');
+  const folder = pathParts.length > 2 ? pathParts[pathParts.length - 2] : '';
+  const slug = pathParts[pathParts.length - 1]?.replace('.md', '') || '';
+  const title = humanize(slug);
+
+  const renderMarkdown = (md) => {
+    if (window.marked) {
+      return <div className="article-md" dangerouslySetInnerHTML={{ __html: window.marked.parse(md) }} />;
+    }
+    return md.split('\n\n').map((p, i) => <p key={i}>{renderInline(p)}</p>);
+  };
+
+  const stripFrontmatter = (md) => md.replace(/^---[\s\S]*?---\n/, '');
+
   return (
     <div className="article-view">
       <div className="article-head">
         <div className="article-breadcrumb">
           <button className="breadcrumb-btn" onClick={() => go('home')}>INDEX</button>
+          {folder && <><span className="crumb-sep">/</span><button className="breadcrumb-btn">{folder}</button></>}
           <span className="crumb-sep">/</span>
-          <button className="breadcrumb-btn">_concepts</button>
-          <span className="crumb-sep">/</span>
-          <span className="crumb-current">{a.title}</span>
+          <span className="crumb-current">{slug}</span>
         </div>
-
-        <div className="article-meta-row">
-          <span className="article-kind">{a.type}</span>
-          <span className={`article-status status-${a.status}`}>{a.status}</span>
-          <span className="article-date">{a.date}</span>
-        </div>
-
-        <h1 className="article-title">{a.title}</h1>
-        <div className="article-domains">
-          {a.domains.map(dId => {
-            const d = DOMAINS.find(x => x.id === dId);
-            return <button key={dId} className="article-domain-tag" onClick={() => go('domain', dId)}>{d?.label || dId}</button>;
-          })}
-        </div>
-
-        <div className="article-backlink-bar">
-          <span className="backlink-cell"><em>{a.inboundLinks}</em> inbound</span>
-          <span className="backlink-cell"><em>{a.outboundLinks}</em> outbound</span>
-          <span className="backlink-cell"><em>4</em> MOCs</span>
-          <span className="backlink-cell"><em>2</em> domains of overlap</span>
-        </div>
+        {articlePath && <div className="article-meta-row"><span className="article-kind mono">{articlePath}</span></div>}
+        <h1 className="article-title">{loading ? 'Loading…' : error ? 'Not found' : title}</h1>
       </div>
 
       <div className="article-body">
-        {a.sections.map((s, i) => (
-          <section key={i} className={`article-section ${s.heading === 'Open Territory' ? 'open-territory' : ''}`}>
-            <h2 className="article-h2">{s.heading}</h2>
-            {s.body.split('\n\n').map((p, j) => (
-              <p key={j}>{renderInline(p)}</p>
-            ))}
-          </section>
-        ))}
+        {loading && <div className="article-loading">Fetching from vault…</div>}
+        {error && (
+          <div className="article-error">
+            <p>Could not load <span className="mono">{articlePath}</span></p>
+            <p>The article may not exist in the vault yet, or the path is wrong.</p>
+            <button className="btn-ghost" onClick={() => go('search')}>Search vault →</button>
+          </div>
+        )}
+        {content && renderMarkdown(stripFrontmatter(content.content))}
+        {!articlePath && renderMarkdown(SAMPLE_ARTICLE.sections.map(s => `## ${s.heading}\n\n${s.body}`).join('\n\n'))}
       </div>
-
-      <aside className="article-aside">
-        <div className="panel-kicker">RELATED · SPREADING ACTIVATION</div>
-        <div className="related-list">
-          {[
-            { id: 'transparency', weight: 5, dir: '→' },
-            { id: 'observability', weight: 5, dir: '→' },
-            { id: 'trust', weight: 4, dir: '←→' },
-            { id: 'incident-learning-ritual', weight: 3, dir: '←' },
-            { id: 'audit-loop', weight: 4, dir: '→' },
-          ].map(r => (
-            <div key={r.id} className="related-row">
-              <span className="rel-dir">{r.dir}</span>
-              <span className="wikilink">[[{r.id}]]</span>
-              <span className="rel-weight">{'●'.repeat(r.weight)}</span>
-            </div>
-          ))}
-        </div>
-      </aside>
     </div>
   );
 }
 
 // ─── SEARCH ─────────────────────────────────────────────────────────────────
-function SearchView() {
+function SearchView({ go }) {
   const [q, setQ] = React.useState('');
   const [results, setResults] = React.useState([]);
   const [searching, setSearching] = React.useState(false);
@@ -354,7 +345,7 @@ function SearchView() {
           const domains = domainOf(r.path);
           const title = titleOf(r.path);
           return (
-            <div key={i} className="search-result">
+            <button key={i} className="search-result" onClick={() => go && go('article', null, r.path)}>
               <div className="sr-head">
                 <span className={`sr-kind kind-${kind}`}>{kind}</span>
                 <span className="sr-title">{title}</span>
@@ -364,7 +355,7 @@ function SearchView() {
               <div className="sr-domains">
                 {domains.map(d => <span key={d} className="sr-domain-chip">{d}</span>)}
               </div>
-            </div>
+            </button>
           );
         })}
         {q.length >= 2 && !searching && results.length === 0 && (
