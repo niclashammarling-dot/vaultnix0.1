@@ -1,0 +1,13 @@
+{
+  "name": "mem1",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "openai": "^4.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@vercel/node": "^4.0.0",
+    "typescript": "^5.7.0"
+  }
+}
