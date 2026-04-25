@@ -37,6 +37,7 @@
     // Sub-modes per macro-mode
     const WORK_SUBMODES = [
       { id: 'ingest',     label: 'Ingest',     desc: 'raw/ capture' },
+      { id: 'ideas',      label: 'Ideas',      desc: 'actionable backlog' },
       { id: 'agenda',     label: 'Agenda',     desc: 'stub list' },
       { id: 'inspection', label: 'Inspection', desc: 'compile diff review' },
     ];
@@ -213,6 +214,7 @@
           <main className="main">
             {/* WORK sub-modes */}
             {mode === 'work' && view === 'ingest'     && <IngestView />}
+            {mode === 'work' && view === 'ideas'      && <IdeasView go={go} />}
             {mode === 'work' && view === 'agenda'     && <AgendaView />}
             {mode === 'work' && view === 'inspection' && <InspectionView />}
 
@@ -228,7 +230,7 @@
             {mode === 'use' && view === 'article'   && <ArticleView go={go} articlePath={articlePath} />}
 
             {/* Fallbacks if someone persists an invalid combo */}
-            {mode === 'work' && !['ingest','agenda','inspection'].includes(view) && <IngestView />}
+            {mode === 'work' && !['ingest','ideas','agenda','inspection'].includes(view) && <IngestView />}
           </main>
 
           {tweaksOpen && (

@@ -423,6 +423,97 @@ function DiffLine({ n, text, add, del, t }) {
   );
 }
 
+// ─── IDEAS (Actionable backlog) ─────────────────────────────────────────────
+function IdeasView({ go }) {
+  const [ideas, setIdeas] = React.useState([]);
+  const [loading, setLoading] = React.useState(true);
+  const [selected, setSelected] = React.useState(0);
+
+  React.useEffect(() => {
+    fetch('/api/ideas')
+      .then(r => r.ok ? r.json() : { ideas: [] })
+      .then(d => { setIdeas(d.ideas || []); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
+
+  const sel = ideas[selected];
+
+  return (
+    <div className="work-view agenda">
+      <div className="work-head">
+        <div className="work-head-left">
+          <div className="work-kicker">A · IDEAS</div>
+          <h1 className="work-title">ideas/</h1>
+          <div className="work-path">actionable backlog · <span className="mono">wiki/domains/general/ideas/</span></div>
+        </div>
+        <div className="work-head-stats">
+          <div className="whs-cell"><div className="whs-k">OPEN</div><div className="whs-v">{loading ? '…' : ideas.filter(i => i.status === 'active').length}</div></div>
+          <div className="whs-cell"><div className="whs-k">NEWEST</div><div className="whs-v">{loading ? '…' : ideas[0]?.date?.slice(5) || '—'}</div></div>
+        </div>
+      </div>
+
+      {loading && (
+        <div className="mono-label" style={{ padding: '2rem 0' }}>Loading ideas…</div>
+      )}
+
+      {!loading && ideas.length === 0 && (
+        <div className="mono-label" style={{ padding: '2rem 0', color: 'var(--fg-soft)' }}>No ideas yet — capture one in Ingest with "idea." prefix.</div>
+      )}
+
+      {!loading && ideas.length > 0 && (
+        <div className="agenda-grid">
+          <div className="stubs-table">
+            <div className="stubs-row stubs-head">
+              <div>IDEA</div><div>STATUS</div><div>DATE</div>
+            </div>
+            {ideas.map((idea, i) => (
+              <button key={idea.slug} className={`stubs-row ${i === selected ? 'selected' : ''}`} onClick={() => setSelected(i)}>
+                <div className="sr-id">
+                  <span className="stub-pill" style={{ background: 'var(--accent-2, #2a3a2a)', color: 'var(--accent-fg, #8fbc8f)' }}>idea</span>
+                  <span className="wikilink">{idea.title}</span>
+                </div>
+                <div><span className={`il-queue il-queue-${idea.status === 'active' ? 'review' : 'compile'}`}>{idea.status}</span></div>
+                <div className="mono" style={{ fontSize: '11px' }}>{idea.date}</div>
+              </button>
+            ))}
+          </div>
+
+          {sel && (
+            <div className="stub-detail">
+              <div className="panel-kicker">SELECTED · {sel.slug}</div>
+              <div className="sd-reason">{sel.summary}</div>
+
+              {sel.tags.length > 0 && (
+                <div className="sd-section">
+                  <div className="mono-label">TAGS</div>
+                  <div className="sr-doms" style={{ marginTop: '0.5rem' }}>
+                    {sel.tags.map(t => <span key={t} className="sr-dom-chip">{t}</span>)}
+                  </div>
+                </div>
+              )}
+
+              {sel.openQs.length > 0 && (
+                <div className="sd-section">
+                  <div className="mono-label">OPEN QUESTIONS</div>
+                  <ul className="sd-inbound" style={{ marginTop: '0.5rem' }}>
+                    {sel.openQs.map((q, i) => <li key={i}><span className="sd-ctx">{q.replace(/^- /, '')}</span></li>)}
+                  </ul>
+                </div>
+              )}
+
+              <div className="sd-actions">
+                <button className="btn-primary" onClick={() => go('article', null, sel.path)}>open article →</button>
+                <button className="btn-ghost">mark complete</button>
+                <button className="btn-ghost">retire</button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── USE mode sub-modes: Navigator (visual map), Lens (MOC-scoped query) ────
 function NavigatorView({ go }) {
   const [activeConcept, setActiveConcept] = React.useState('honesty');
@@ -579,4 +670,4 @@ function LensView({ domainId, go }) {
   );
 }
 
-Object.assign(window, { IngestView, AgendaView, InspectionView, NavigatorView, LensView });
+Object.assign(window, { IngestView, IdeasView, AgendaView, InspectionView, NavigatorView, LensView });
