@@ -123,20 +123,21 @@ function IngestView() {
 function AgendaView() {
   const [sort, setSort] = React.useState('score');
   const [selected, setSelected] = React.useState(0);
+  const [stubs, setStubs] = React.useState([]);
+  const [lintDate, setLintDate] = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
 
-  const STUBS = [
-    { id: 'surfacing-skill', inbound: 7, domains: ['apex','tcx','teaching','knowledge-work'], moc: 4, age: 12, score: 94, reason: 'Behavioral counterpart to the no-gap principle. Referenced by 7 articles; no parent article. Cross-domain reach: 4.' },
-    { id: 'moc-as-argument', inbound: 5, domains: ['knowledge-work'], moc: 1, age: 28, score: 86, reason: 'Self-referential: the vault contains MOCs but no article defining what distinguishes an argumentative MOC from a catalog.' },
-    { id: 'query-invisible-articles', inbound: 4, domains: ['knowledge-work'], moc: 1, age: 5, score: 81, reason: 'Structurally graph-healthy but unreachable via any enforcement layer. Confirmed first instance: observability.md.' },
-    { id: 'flow', inbound: 3, domains: ['knowledge-work','teaching','hiking'], moc: 3, age: 41, score: 78, reason: 'Referenced tangentially in session-close-ritual and hiking brand; no concept article. Cross-domain reach: 3.' },
-    { id: 'regime-bayes-likelihood-ratio', inbound: 4, domains: ['apex'], moc: 1, age: 8, score: 72, reason: 'The formal mathematics behind the regime chain. Stub has accumulated 4 inbound links from gate-chain articles.' },
-    { id: 'lock-leading-corroboration', inbound: 3, domains: ['apex'], moc: 1, age: 14, score: 68, reason: '2-of-4 corroboration pattern; referenced in corroboration-architecture but never expanded.' },
-    { id: 'backlink-architecture', inbound: 3, domains: ['knowledge-work'], moc: 1, age: 32, score: 64, reason: 'Inbound links as the graph\'s immune system. Stub remains open.' },
-    { id: 'file-over-app', inbound: 2, domains: ['knowledge-work'], moc: 1, age: 55, score: 58, reason: 'Inspectability and portability as non-negotiable.' },
-  ];
+  React.useEffect(() => {
+    fetch('/api/stubs')
+      .then(r => r.ok ? r.json() : { stubs: [] })
+      .then(d => { setStubs(d.stubs || []); setLintDate(d.lintDate || null); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
 
-  const sorted = [...STUBS].sort((a,b) => sort === 'score' ? b.score - a.score : sort === 'age' ? b.age - a.age : b.inbound - a.inbound);
+  const sorted = [...stubs].sort((a,b) => sort === 'score' ? b.score - a.score : b.inbound - a.inbound);
   const sel = sorted[selected];
+
+  const highPriority = stubs.filter(s => s.score >= 70).length;
 
   return (
     <div className="work-view agenda">
@@ -144,74 +145,73 @@ function AgendaView() {
         <div className="work-head-left">
           <div className="work-kicker">A · STRATEGIC AGENDA</div>
           <h1 className="work-title">stubs/</h1>
-          <div className="work-path">the vault's honest statement of what it needs next · <span className="mono">19 open · 4 high-priority</span></div>
+          <div className="work-path">the vault's honest statement of what it needs next · <span className="mono">{lintDate ? `lint: ${lintDate}` : 'loading…'}</span></div>
         </div>
         <div className="work-head-stats">
-          <div className="whs-cell"><div className="whs-k">OPEN</div><div className="whs-v">19</div></div>
-          <div className="whs-cell"><div className="whs-k">SCORE≥80</div><div className="whs-v">4</div></div>
-          <div className="whs-cell"><div className="whs-k">OLDEST</div><div className="whs-v">55d</div></div>
+          <div className="whs-cell"><div className="whs-k">OPEN</div><div className="whs-v">{loading ? '…' : stubs.length}</div></div>
+          <div className="whs-cell"><div className="whs-k">HIGH-PRI</div><div className="whs-v">{loading ? '…' : highPriority}</div></div>
         </div>
       </div>
 
-      <div className="agenda-controls">
-        <span className="mono-label">SORT</span>
-        {['score','inbound','age'].map(s => (
-          <button key={s} className={`chip ${sort === s ? 'active' : ''}`} onClick={() => setSort(s)}>{s}</button>
-        ))}
-      </div>
+      {loading && <div className="mono-label" style={{ padding: '2rem 0' }}>Loading stubs from lint…</div>}
 
-      <div className="agenda-grid">
-        <div className="stubs-table">
-          <div className="stubs-row stubs-head">
-            <div>STUB</div><div>SCORE</div><div>INBOUND</div><div>DOMAINS</div><div>AGE</div>
+      {!loading && stubs.length === 0 && (
+        <div className="mono-label" style={{ padding: '2rem 0', color: 'var(--fg-soft)' }}>No stubs found in latest lint report.</div>
+      )}
+
+      {!loading && stubs.length > 0 && (
+        <>
+          <div className="agenda-controls">
+            <span className="mono-label">SORT</span>
+            {['score','inbound'].map(s => (
+              <button key={s} className={`chip ${sort === s ? 'active' : ''}`} onClick={() => setSort(s)}>{s}</button>
+            ))}
           </div>
-          {sorted.map((s, i) => (
-            <button key={s.id} className={`stubs-row ${i === selected ? 'selected' : ''}`} onClick={() => setSelected(i)}>
-              <div className="sr-id">
-                <span className="stub-pill">stub</span>
-                <span className="wikilink">[[{s.id}]]</span>
-              </div>
-              <div className="sr-score">
-                <div className="score-gauge"><div style={{ width: `${s.score}%` }} /></div>
-                <span className="mono">{s.score}</span>
-              </div>
-              <div className="mono">{s.inbound}</div>
-              <div className="sr-doms">{s.domains.map(d => <span key={d} className="sr-dom-chip">{d}</span>)}</div>
-              <div className="mono">{s.age}d</div>
-            </button>
-          ))}
-        </div>
 
-        <div className="stub-detail">
-          <div className="panel-kicker">SELECTED · {sel.id}</div>
-          <div className="sd-reason">{sel.reason}</div>
-
-          <div className="sd-section">
-            <div className="mono-label">SCORING</div>
-            <div className="sd-scoring">
-              <div className="sd-score-row"><span>Inbound links</span><span className="mono">{sel.inbound}</span><div className="score-bar-mini"><div style={{ width: `${sel.inbound*14}%` }} /></div></div>
-              <div className="sd-score-row"><span>Cross-domain reach</span><span className="mono">{sel.domains.length}</span><div className="score-bar-mini"><div style={{ width: `${sel.domains.length*25}%` }} /></div></div>
-              <div className="sd-score-row"><span>MOC alignment</span><span className="mono">{sel.moc}</span><div className="score-bar-mini"><div style={{ width: `${sel.moc*25}%` }} /></div></div>
-              <div className="sd-score-row"><span>Synthesis potential</span><span className="mono">{Math.round(sel.score/10)}/10</span><div className="score-bar-mini"><div style={{ width: `${sel.score}%` }} /></div></div>
+          <div className="agenda-grid">
+            <div className="stubs-table">
+              <div className="stubs-row stubs-head">
+                <div>STUB</div><div>SCORE</div><div>INBOUND</div><div>DOMAINS</div>
+              </div>
+              {sorted.map((s, i) => (
+                <button key={s.id} className={`stubs-row ${i === selected ? 'selected' : ''}`} onClick={() => setSelected(i)}>
+                  <div className="sr-id">
+                    <span className="stub-pill">stub</span>
+                    <span className="wikilink">[[{s.id}]]</span>
+                  </div>
+                  <div className="sr-score">
+                    <div className="score-gauge"><div style={{ width: `${s.score}%` }} /></div>
+                    <span className="mono">{s.score}</span>
+                  </div>
+                  <div className="mono">{s.inbound}</div>
+                  <div className="sr-doms">{s.domains.map(d => <span key={d} className="sr-dom-chip">{d}</span>)}</div>
+                </button>
+              ))}
             </div>
-          </div>
 
-          <div className="sd-section">
-            <div className="mono-label">INBOUND FROM</div>
-            <ul className="sd-inbound">
-              <li><span className="wikilink">[[honesty]]</span><span className="sd-ctx">"the behavioral counterpart to the no-gap principle"</span></li>
-              <li><span className="wikilink">[[incident-learning-ritual]]</span><span className="sd-ctx">"closest existing instance"</span></li>
-              <li><span className="wikilink">[[tcx-moc]]</span><span className="sd-ctx">"agents surface uncertainty, but skill is implicit"</span></li>
-            </ul>
-          </div>
+            {sel && (
+              <div className="stub-detail">
+                <div className="panel-kicker">SELECTED · {sel.id}</div>
+                <div className="sd-reason">{sel.description}</div>
 
-          <div className="sd-actions">
-            <button className="btn-primary">promote to draft →</button>
-            <button className="btn-ghost">defer</button>
-            <button className="btn-ghost">merge into…</button>
+                <div className="sd-section">
+                  <div className="mono-label">SCORING</div>
+                  <div className="sd-scoring">
+                    <div className="sd-score-row"><span>Inbound links</span><span className="mono">{sel.inbound}</span><div className="score-bar-mini"><div style={{ width: `${Math.min(100, sel.inbound * 7)}%` }} /></div></div>
+                    <div className="sd-score-row"><span>Cross-domain reach</span><span className="mono">{sel.domains.length}</span><div className="score-bar-mini"><div style={{ width: `${sel.domains.length * 25}%` }} /></div></div>
+                    <div className="sd-score-row"><span>Score</span><span className="mono">{sel.score}/100</span><div className="score-bar-mini"><div style={{ width: `${sel.score}%` }} /></div></div>
+                  </div>
+                </div>
+
+                <div className="sd-actions">
+                  <button className="btn-primary">promote to draft →</button>
+                  <button className="btn-ghost">defer</button>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
