@@ -216,199 +216,181 @@ function AgendaView() {
   );
 }
 
-// ─── INSPECTION (Compile diff review) ───────────────────────────────────────
+// ─── INSPECTION (raw/ viewer + vault health) ────────────────────────────────
 function InspectionView() {
-  const [selectedFile, setSelectedFile] = React.useState(0);
+  const [data, setData]               = React.useState(null);
+  const [loading, setLoading]         = React.useState(true);
+  const [selectedIdx, setSelectedIdx] = React.useState(0);
+  const [fileContent, setFileContent] = React.useState(null);
+  const [contentLoading, setContentLoading] = React.useState(false);
 
-  const FILES = [
-    { path: 'wiki/_concepts/corroboration-architecture.md', status: 'new', lines: [185, 0], kind: 'concept' },
-    { path: 'wiki/_concepts/bayesian-inference.md', status: 'new', lines: [212, 0], kind: 'concept' },
-    { path: 'wiki/_concepts/honesty.md', status: 'modified', lines: [14, 3], kind: 'concept' },
-    { path: 'wiki/apex/audit-pipeline-completeness-check18.md', status: 'modified', lines: [6, 2], kind: 'article' },
-    { path: 'wiki/_mocs/apex-moc.md', status: 'modified', lines: [3, 1], kind: 'MOC' },
-  ];
+  React.useEffect(() => {
+    fetch('/api/inspection')
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setData(d); setLoading(false); })
+      .catch(() => setLoading(false));
+  }, []);
 
+  const files = data?.files || [];
+  const hooks = data?.hooks || [];
+  const sel   = files[selectedIdx];
+
+  React.useEffect(() => {
+    if (!sel) return;
+    setFileContent(null);
+    setContentLoading(true);
+    fetch(`/api/file?path=${encodeURIComponent(sel.path)}`)
+      .then(r => r.ok ? r.json() : null)
+      .then(d => { setFileContent(d?.content || null); setContentLoading(false); })
+      .catch(() => setContentLoading(false));
+  }, [sel?.path]);
+
+  const failCount = hooks.filter(h => h.status === 'fail').length;
+  const warnCount = hooks.filter(h => h.status === 'warn').length;
+  const pending   = files.filter(f => f.status === 'pending').length;
+
+  // Mock activations — will be wired to real compile data in a future step
   const ACTIVATIONS = [
-    { from: 'corroboration-architecture', to: 'complementary-functions', relation: 'distinct-from', rationale: 'Agreement-before-action vs. coexistence.' },
-    { from: 'corroboration-architecture', to: 'lock-leading', relation: 'instance-of', rationale: '2-of-4 corroboration pattern in APEX.' },
-    { from: 'bayesian-inference', to: 'regime-matrix', relation: 'grounds', rationale: 'Prior × likelihood → posterior formalism underlying regime-bayes-lr.' },
-    { from: 'bayesian-inference', to: 'observability', relation: 'operationalizes', rationale: 'Update degree-of-belief via inspection layer.' },
-    { from: 'honesty', to: 'surfacing-skill', relation: 'demands', rationale: 'Behavioral counterpart stub.' },
+    { from: 'ideas-prefix-routing', to: 'compilation-skill', relation: 'updates', rationale: 'Routing rule added for idea. prefix.' },
+    { from: 'vault-capture-tab-category', to: 'capture-interface-design-constraints', relation: 'refines', rationale: 'Category selector closes the domain-routing gap at intake.' },
   ];
-
-  const HOOKS = [
-    { name: 'graph:no-orphans', status: 'pass', note: '0 orphans' },
-    { name: 'graph:4-hop-reachability', status: 'pass', note: 'worst: surfacing-skill @ 3 hops' },
-    { name: 'struct:frontmatter-complete', status: 'pass', note: '5/5 files' },
-    { name: 'quality:spreading-activation≥3', status: 'warn', note: 'honesty.md: 2 new activations (soft floor 3)' },
-    { name: 'quality:moc-referenced', status: 'fail', note: 'apex-moc.md: 1 article unreferenced (sector-grid)' },
-    { name: 'struct:no-bare-references', status: 'pass', note: '0 bare references' },
-  ];
-
-  const DELTAS = [
-    { concept: 'honesty', from: 'stub', to: 'article', basis: '3 raw/ sources, 7 inbound links, 2 MOCs', confidence: 0.91 },
-    { concept: 'surfacing-skill', from: 'unknown', to: 'stub', basis: 'flagged by honesty.md as behavioral counterpart', confidence: 0.78 },
-    { concept: 'corroboration-architecture', from: 'unknown', to: 'concept', basis: 'synthesis of 4 raw/ entries across APEX + TCX', confidence: 0.88 },
-  ];
-
-  const sel = FILES[selectedFile];
 
   return (
     <div className="work-view inspection">
       <div className="work-head">
         <div className="work-head-left">
           <div className="work-kicker">A · INSPECTION GATE</div>
-          <h1 className="work-title">compile/2026-04-23-0200</h1>
-          <div className="work-path">raw/ → wiki/ · <span className="mono">5 files · +417 / −6 lines · 5 spreading activations · 1 hook warn</span></div>
+          <h1 className="work-title">raw/</h1>
+          <div className="work-path">
+            {loading ? 'loading…' : <span className="mono">{files.length} files · {pending} pending compile · lint: {data?.lintDate || '—'}</span>}
+          </div>
         </div>
         <div className="work-head-stats">
-          <div className="whs-cell pass"><div className="whs-k">HOOKS</div><div className="whs-v">5/6</div><div className="whs-sub">1 soft warn</div></div>
-          <div className="whs-cell"><div className="whs-k">ACTIVATIONS</div><div className="whs-v">5</div></div>
-          <div className="whs-cell pending"><div className="whs-k">STATUS</div><div className="whs-v">REVIEW</div><div className="whs-sub">awaiting approval</div></div>
+          <div className={`whs-cell ${failCount > 0 ? 'fail' : warnCount > 0 ? '' : 'pass'}`}>
+            <div className="whs-k">HOOKS</div>
+            <div className="whs-v">{loading ? '…' : `${hooks.filter(h=>h.status==='pass').length}/${hooks.length}`}</div>
+            <div className="whs-sub">{failCount > 0 ? `${failCount} fail` : warnCount > 0 ? `${warnCount} warn` : 'all pass'}</div>
+          </div>
+          <div className="whs-cell">
+            <div className="whs-k">PENDING</div>
+            <div className="whs-v">{loading ? '…' : pending}</div>
+            <div className="whs-sub">awaiting compile</div>
+          </div>
         </div>
       </div>
 
-      {/* Classification deltas — re-classifications needing approval */}
-      <div className="inspection-deltas">
-        <div className="panel-kicker">CLASSIFICATION DELTAS · {DELTAS.length}</div>
-        <div className="deltas-list">
-          {DELTAS.map((d, i) => (
-            <div key={i} className="delta-row">
-              <div className="delta-concept wikilink">[[{d.concept}]]</div>
-              <div className="delta-transition">
-                <span className={`delta-pill from-${d.from}`}>{d.from}</span>
-                <span className="delta-arrow">→</span>
-                <span className={`delta-pill to-${d.to}`}>{d.to}</span>
-              </div>
-              <div className="delta-basis">{d.basis}</div>
-              <div className="delta-conf mono">{d.confidence.toFixed(2)}</div>
-              <div className="delta-actions">
-                <button className="mini-btn approve">✓</button>
-                <button className="mini-btn reject">✕</button>
+      {loading && <div className="mono-label" style={{ padding: '2rem 0' }}>Loading raw/ files…</div>}
+
+      {!loading && (
+        <>
+          {/* Fail-loud alerts — one per failed hook */}
+          {hooks.filter(h => h.status === 'fail').map(h => (
+            <div key={h.name} className="fail-loud-alert">
+              <div className="fla-icon">■</div>
+              <div className="fla-body">
+                <div className="fla-title">hook <span className="mono">{h.name}</span> FAILED</div>
+                <div className="fla-detail">{h.note}</div>
               </div>
             </div>
           ))}
-        </div>
-      </div>
 
-      {/* Fail-loud alert — silence means clean */}
-      <div className="fail-loud-alert">
-        <div className="fla-icon">■</div>
-        <div className="fla-body">
-          <div className="fla-title">hook <span className="mono">quality:moc-referenced</span> FAILED — inspect before proceeding</div>
-          <div className="fla-detail">
-            <span className="wikilink broken">[[apex-moc]]</span> no longer references
-            <span className="wikilink broken"> [[sector-grid]]</span>. The MOC is broken until a human re-establishes the link or removes the article.
-          </div>
-        </div>
-        <button className="mini-btn">open MOC</button>
-      </div>
-
-      {/* Hook enforcement panel */}
-      <div className="inspection-hooks">
-        <div className="panel-kicker">HOOK ENFORCEMENT</div>
-        <div className="hooks-grid">
-          {HOOKS.map(h => (
-            <div key={h.name} className={`hook-cell hook-${h.status}`}>
-              <div className="hook-status-dot" />
-              <div className="hook-name mono">{h.name}</div>
-              <div className="hook-note">{h.note}</div>
+          {/* Hook enforcement */}
+          <div className="inspection-hooks">
+            <div className="panel-kicker">HOOK ENFORCEMENT · lint/{data?.lintDate || '—'}</div>
+            <div className="hooks-grid">
+              {hooks.map(h => (
+                <div key={h.name} className={`hook-cell hook-${h.status}`}>
+                  <div className="hook-status-dot" />
+                  <div className="hook-name mono">{h.name}</div>
+                  <div className="hook-note">{h.note}</div>
+                </div>
+              ))}
+              {hooks.length === 0 && (
+                <div className="hook-cell hook-pass">
+                  <div className="hook-status-dot" />
+                  <div className="hook-name mono">no lint report found</div>
+                  <div className="hook-note">run lint to populate</div>
+                </div>
+              )}
             </div>
-          ))}
-        </div>
-      </div>
-
-      <div className="inspection-grid">
-        {/* File list */}
-        <div className="inspection-files">
-          <div className="panel-kicker">FILES · 5</div>
-          <div className="file-list">
-            {FILES.map((f, i) => (
-              <button key={f.path} className={`file-row ${i === selectedFile ? 'selected' : ''} file-${f.status}`} onClick={() => setSelectedFile(i)}>
-                <span className={`file-status file-status-${f.status}`}>{f.status === 'new' ? 'NEW' : 'MOD'}</span>
-                <span className="file-path mono">{f.path.replace('wiki/','')}</span>
-                <span className="file-lines mono">
-                  {f.lines[0] > 0 && <span className="lines-add">+{f.lines[0]}</span>}
-                  {f.lines[1] > 0 && <span className="lines-del">−{f.lines[1]}</span>}
-                </span>
-              </button>
-            ))}
           </div>
-          <div className="panel-divider" />
-          <div className="panel-kicker">ACTIVATIONS · 5</div>
-          <div className="activations-list">
-            {ACTIVATIONS.map((a, i) => (
-              <div key={i} className="activation-row">
-                <div className="act-edge">
-                  <span className="wikilink">[[{a.from}]]</span>
-                  <span className="act-relation mono">—{a.relation}→</span>
-                  <span className="wikilink">[[{a.to}]]</span>
-                </div>
-                <div className="act-rationale">{a.rationale}</div>
-                <div className="act-actions">
-                  <button className="mini-btn approve">✓</button>
-                  <button className="mini-btn reject">✕</button>
-                </div>
+
+          <div className="inspection-grid">
+            {/* File list + activations */}
+            <div className="inspection-files">
+              <div className="panel-kicker">RAW FILES · {files.length} ({pending} pending)</div>
+              <div className="file-list">
+                {files.map((f, i) => (
+                  <button
+                    key={f.path}
+                    className={`file-row ${i === selectedIdx ? 'selected' : ''} file-${f.status === 'pending' ? 'new' : 'modified'}`}
+                    onClick={() => setSelectedIdx(i)}
+                  >
+                    <span className={`file-status file-status-${f.status === 'pending' ? 'new' : 'modified'}`}>
+                      {f.status === 'pending' ? 'NEW' : 'DONE'}
+                    </span>
+                    <span className="file-path mono">{f.path.replace('raw/','')}</span>
+                    <span className="mono" style={{ fontSize: '10px', color: 'var(--fg-soft)', flexShrink: 0 }}>
+                      {f.sourceType}
+                    </span>
+                  </button>
+                ))}
               </div>
-            ))}
-          </div>
-        </div>
+              <div className="panel-divider" />
+              <div className="panel-kicker">ACTIVATIONS · {ACTIVATIONS.length} <span style={{fontSize:'10px',opacity:0.5}}>(mock — next: wire compile)</span></div>
+              <div className="activations-list">
+                {ACTIVATIONS.map((a, i) => (
+                  <div key={i} className="activation-row">
+                    <div className="act-edge">
+                      <span className="wikilink">[[{a.from}]]</span>
+                      <span className="act-relation mono">—{a.relation}→</span>
+                      <span className="wikilink">[[{a.to}]]</span>
+                    </div>
+                    <div className="act-rationale">{a.rationale}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
 
-        {/* Diff view */}
-        <div className="inspection-diff">
-          <div className="diff-head">
-            <span className={`file-status file-status-${sel.status}`}>{sel.status.toUpperCase()}</span>
-            <span className="mono diff-path">{sel.path}</span>
-            <div className="diff-actions">
-              <button className="mini-btn approve">approve</button>
-              <button className="mini-btn reject">reject</button>
-              <button className="mini-btn">edit</button>
+            {/* File content viewer */}
+            <div className="inspection-diff">
+              {sel ? (
+                <>
+                  <div className="diff-head">
+                    <span className={`file-status file-status-${sel.status === 'pending' ? 'new' : 'modified'}`}>
+                      {sel.status === 'pending' ? 'PENDING' : 'COMPILED'}
+                    </span>
+                    <span className="mono diff-path">{sel.path}</span>
+                  </div>
+                  <div style={{ padding: '0.4rem 0.8rem', fontSize: '11px', color: 'var(--fg-soft)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)' }}>
+                    {sel.project && <span style={{ marginRight: '1rem' }}>project: {sel.project}</span>}
+                    {sel.date    && <span style={{ marginRight: '1rem' }}>date: {sel.date}</span>}
+                    {sel.sourceType && <span>type: {sel.sourceType}</span>}
+                  </div>
+                  <div className="diff-body">
+                    {contentLoading && (
+                      <div className="diff-line"><span className="diff-text mono" style={{ color: 'var(--fg-soft)' }}>loading…</span></div>
+                    )}
+                    {!contentLoading && fileContent && fileContent.split('\n').slice(0, 60).map((line, i) => (
+                      <DiffLine key={i} n={i + 1} text={line} add={sel.status === 'pending'} />
+                    ))}
+                    {!contentLoading && fileContent && fileContent.split('\n').length > 60 && (
+                      <div className="diff-more mono">… {fileContent.split('\n').length - 60} more lines</div>
+                    )}
+                    {!contentLoading && !fileContent && (
+                      <div className="diff-line"><span className="diff-text mono" style={{ color: 'var(--fg-soft)' }}>could not load file</span></div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ padding: '2rem', color: 'var(--fg-soft)', fontFamily: 'var(--mono)', fontSize: '12px' }}>
+                  select a file to inspect
+                </div>
+              )}
             </div>
           </div>
-          <div className="diff-body">
-            <DiffLine n="1" t="frontmatter" text="---" />
-            <DiffLine n="2" text="title: Corroboration Architecture" />
-            <DiffLine n="3" text="type: concept" />
-            <DiffLine n="4" text="projects: [apex, tcx, knowledge-work]" />
-            <DiffLine n="5" text="tags: [concept, design-pattern]" />
-            <DiffLine n="6" text="date: 2026-04-23" />
-            <DiffLine n="7" text="related:" />
-            <DiffLine n="8" text="  - [[complementary-functions]]" add />
-            <DiffLine n="9" text="  - [[lock-leading]]" add />
-            <DiffLine n="10" text="  - [[tcx-inspector]]" add />
-            <DiffLine n="11" text="---" />
-            <DiffLine n="12" text="" />
-            <DiffLine n="13" t="h2" text="## The Argument" />
-            <DiffLine n="14" text="" />
-            <DiffLine n="15" text="Corroboration architecture is the design pattern of requiring" add />
-            <DiffLine n="16" text="agreement from multiple independent checks before consequential" add />
-            <DiffLine n="17" text="action. Each additional independent check multiplies required" add />
-            <DiffLine n="18" text="corroboration, reducing false positives multiplicatively." add />
-            <DiffLine n="19" text="" add />
-            <DiffLine n="20" text="Distinct from [[complementary-functions]] — this is specifically" add />
-            <DiffLine n="21" text="an agreement-before-action protocol." add />
-            <DiffLine n="22" text="" add />
-            <DiffLine n="23" t="h2" text="## Instances" />
-            <DiffLine n="24" text="" add />
-            <DiffLine n="25" text="- APEX two-layer audit (mechanical + LLM)" add />
-            <DiffLine n="26" text="- TCX Inspector (5-dimension validation)" add />
-            <DiffLine n="27" text="- Vault hook enforcement (structural + graph + quality)" add />
-            <DiffLine n="28" text="- Lock Leading (2-of-4)" add />
-            <div className="diff-more mono">… 157 more lines (expand)</div>
-          </div>
-        </div>
-      </div>
-
-      <div className="inspection-footer">
-        <div className="if-summary">
-          <span className="mono-label">COMPILE SUMMARY</span>
-          <span>5 files reviewed · 0 rejected · 0 edits · 1 soft warn unresolved</span>
-        </div>
-        <div className="if-actions">
-          <button className="btn-ghost">reject all · rerun compile</button>
-          <button className="btn-primary">approve compile → commit to wiki/</button>
-        </div>
-      </div>
+        </>
+      )}
     </div>
   );
 }
