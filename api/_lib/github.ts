@@ -102,6 +102,37 @@ export async function getArticlesForQuery(query: string): Promise<string> {
   return `## INDEX\n${index}\n\n## RELEVANT ARTICLES\n${articles}`
 }
 
+export async function updateFile(path: string, content: string, sha: string, message: string): Promise<void> {
+  const encoded = Buffer.from(content).toString('base64')
+  const res = await fetch(
+    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${path}`,
+    {
+      method: 'PUT',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, content: encoded, sha, branch: BRANCH }),
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(`Update failed: ${err.message}`)
+  }
+}
+
+export async function deleteFile(path: string, sha: string, message: string): Promise<void> {
+  const res = await fetch(
+    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${path}`,
+    {
+      method: 'DELETE',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message, sha, branch: BRANCH }),
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json()
+    throw new Error(`Delete failed: ${err.message}`)
+  }
+}
+
 export async function commitRawNote(filename: string, content: string, domain = 'general'): Promise<void> {
   const path = `raw/${domain}/${filename}`
   const encoded = Buffer.from(content).toString('base64')

@@ -216,13 +216,63 @@ function AgendaView() {
   );
 }
 
-// ─── INSPECTION (raw/ viewer + vault health) ────────────────────────────────
+// ─── INSPECTION helpers ──────────────────────────────────────────────────────
+
+function RejectModal({ article, onFlag, onDelete, onCancel }) {
+  return (
+    <div style={{ position:'fixed', inset:0, background:'rgba(0,0,0,0.7)', zIndex:1000, display:'flex', alignItems:'center', justifyContent:'center' }}>
+      <div style={{ background:'var(--bg-panel)', border:'1px solid var(--border)', borderRadius:'4px', padding:'1.5rem', maxWidth:'420px', width:'90%' }}>
+        <div className="panel-kicker" style={{ marginBottom:'0.75rem' }}>REJECT · [[{article.slug}]]</div>
+        <p style={{ fontSize:'13px', color:'var(--fg-soft)', marginBottom:'1.25rem', lineHeight:'1.5' }}>
+          Choose what happens to this compiled article.
+        </p>
+        <div style={{ display:'flex', flexDirection:'column', gap:'0.6rem', marginBottom:'1.25rem' }}>
+          <button className="btn-ghost" style={{ textAlign:'left', padding:'0.75rem 1rem' }} onClick={onDelete}>
+            <div style={{ fontFamily:'var(--mono)', fontSize:'12px', color:'var(--warn)', marginBottom:'3px' }}>DELETE &amp; RECOMPILE</div>
+            <div style={{ fontSize:'12px', color:'var(--fg-soft)' }}>Remove from wiki/. Raw source stays — compiler picks it up next run.</div>
+          </button>
+          <button className="btn-ghost" style={{ textAlign:'left', padding:'0.75rem 1rem' }} onClick={onFlag}>
+            <div style={{ fontFamily:'var(--mono)', fontSize:'12px', color:'var(--accent)', marginBottom:'3px' }}>FLAG FOR PENDING REVIEW</div>
+            <div style={{ fontSize:'12px', color:'var(--fg-soft)' }}>Keep in wiki/. Add to Pending Review — surfaces at next session opener.</div>
+          </button>
+        </div>
+        <button className="btn-ghost" style={{ width:'100%' }} onClick={onCancel}>cancel</button>
+      </div>
+    </div>
+  );
+}
+
+function LintSection({ title, content }) {
+  const [open, setOpen] = React.useState(true);
+  if (!content?.trim()) return null;
+  return (
+    <div style={{ marginBottom:'1rem', borderBottom:'1px solid var(--border)' }}>
+      <button
+        style={{ width:'100%', textAlign:'left', padding:'0.5rem 0', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="panel-kicker">{title}</span>
+        <span className="mono" style={{ fontSize:'10px', color:'var(--fg-soft)' }}>{open ? '▲' : '▼'}</span>
+      </button>
+      {open && (
+        <pre style={{ fontFamily:'var(--mono)', fontSize:'11px', color:'var(--fg-soft)', whiteSpace:'pre-wrap', lineHeight:'1.6', padding:'0.5rem 0 1rem' }}>
+          {content.trim()}
+        </pre>
+      )}
+    </div>
+  );
+}
+
+// ─── INSPECTION ──────────────────────────────────────────────────────────────
 function InspectionView() {
-  const [data, setData]               = React.useState(null);
-  const [loading, setLoading]         = React.useState(true);
-  const [selectedIdx, setSelectedIdx] = React.useState(0);
-  const [fileContent, setFileContent] = React.useState(null);
-  const [contentLoading, setContentLoading] = React.useState(false);
+  const [data, setData]         = React.useState(null);
+  const [loading, setLoading]   = React.useState(true);
+  const [subTab, setSubTab]     = React.useState('compile');
+  const [selectedQueue, setSelectedQueue] = React.useState(0);
+  const [queueContent, setQueueContent]   = React.useState(null);
+  const [queueLoading, setQueueLoading]   = React.useState(false);
+  const [rejectTarget, setRejectTarget]   = React.useState(null);
+  const [actionStatus, setActionStatus]   = React.useState({});
 
   React.useEffect(() => {
     fetch('/api/inspection')
@@ -231,59 +281,94 @@ function InspectionView() {
       .catch(() => setLoading(false));
   }, []);
 
-  const files = data?.files || [];
-  const hooks = data?.hooks || [];
-  const sel   = files[selectedIdx];
+  const pendingReview = data?.pendingReview || [];
+  const recentCompile = data?.recentCompile || [];
+  const rawQueue      = data?.rawQueue      || [];
+  const hooks         = data?.hooks         || [];
+  const lintSections  = data?.lintSections  || {};
+  const failCount     = data?.failCount     || 0;
+  const warnCount     = data?.warnCount     || 0;
 
+  const selQueue = rawQueue[selectedQueue];
   React.useEffect(() => {
-    if (!sel) return;
-    setFileContent(null);
-    setContentLoading(true);
-    fetch(`/api/file?path=${encodeURIComponent(sel.path)}`)
+    if (!selQueue) return;
+    setQueueContent(null); setQueueLoading(true);
+    fetch(`/api/file?path=${encodeURIComponent(selQueue.path)}`)
       .then(r => r.ok ? r.json() : null)
-      .then(d => { setFileContent(d?.content || null); setContentLoading(false); })
-      .catch(() => setContentLoading(false));
-  }, [sel?.path]);
+      .then(d => { setQueueContent(d?.content || null); setQueueLoading(false); })
+      .catch(() => setQueueLoading(false));
+  }, [selQueue?.path]);
 
-  const failCount = hooks.filter(h => h.status === 'fail').length;
-  const warnCount = hooks.filter(h => h.status === 'warn').length;
-  const pending   = files.filter(f => f.status === 'pending').length;
+  const handleReject = (article) => setRejectTarget(article);
 
-  // Mock activations — will be wired to real compile data in a future step
-  const ACTIVATIONS = [
-    { from: 'ideas-prefix-routing', to: 'compilation-skill', relation: 'updates', rationale: 'Routing rule added for idea. prefix.' },
-    { from: 'vault-capture-tab-category', to: 'capture-interface-design-constraints', relation: 'refines', rationale: 'Category selector closes the domain-routing gap at intake.' },
-  ];
+  const handleRejectAction = async (action) => {
+    const art = rejectTarget;
+    if (!art) return;
+    setActionStatus(s => ({ ...s, [art.slug]: 'working' }));
+    setRejectTarget(null);
+    try {
+      const res = await fetch('/api/review', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, slug: art.slug, path: art.path, title: art.description }),
+      });
+      const d = await res.json();
+      setActionStatus(s => ({ ...s, [art.slug]: d.ok ? action : 'error' }));
+      if (action === 'delete') {
+        setData(prev => prev ? { ...prev, recentCompile: prev.recentCompile.filter(a => a.slug !== art.slug) } : prev);
+      } else if (action === 'flag') {
+        setData(prev => prev ? { ...prev, pendingReview: [...prev.pendingReview, { slug: art.slug, description: art.description }] } : prev);
+      }
+    } catch {
+      setActionStatus(s => ({ ...s, [art.slug]: 'error' }));
+    }
+  };
+
+  const subTabs = ['compile', 'queue', 'lint'];
 
   return (
     <div className="work-view inspection">
+      {rejectTarget && (
+        <RejectModal
+          article={rejectTarget}
+          onFlag={() => handleRejectAction('flag')}
+          onDelete={() => handleRejectAction('delete')}
+          onCancel={() => setRejectTarget(null)}
+        />
+      )}
+
+      {/* Header */}
       <div className="work-head">
         <div className="work-head-left">
           <div className="work-kicker">A · INSPECTION GATE</div>
-          <h1 className="work-title">raw/</h1>
+          <h1 className="work-title">vault/</h1>
           <div className="work-path">
-            {loading ? 'loading…' : <span className="mono">{files.length} files · {pending} pending compile · lint: {data?.lintDate || '—'}</span>}
+            {loading ? 'loading…' : <span className="mono">
+              {recentCompile.length} compiled · {rawQueue.length} in queue · lint: {data?.lintDate || '—'}
+            </span>}
           </div>
         </div>
         <div className="work-head-stats">
-          <div className={`whs-cell ${failCount > 0 ? 'fail' : warnCount > 0 ? '' : 'pass'}`}>
+          <div className={`whs-cell ${failCount > 0 ? '' : 'pass'}`}>
             <div className="whs-k">HOOKS</div>
             <div className="whs-v">{loading ? '…' : `${hooks.filter(h=>h.status==='pass').length}/${hooks.length}`}</div>
-            <div className="whs-sub">{failCount > 0 ? `${failCount} fail` : warnCount > 0 ? `${warnCount} warn` : 'all pass'}</div>
+            <div className="whs-sub" style={{ color: failCount > 0 ? 'var(--warn)' : warnCount > 0 ? 'var(--fg-soft)' : '' }}>
+              {failCount > 0 ? `${failCount} FAIL` : warnCount > 0 ? `${warnCount} warn` : 'all pass'}
+            </div>
           </div>
-          <div className="whs-cell">
-            <div className="whs-k">PENDING</div>
-            <div className="whs-v">{loading ? '…' : pending}</div>
-            <div className="whs-sub">awaiting compile</div>
+          <div className="whs-cell pending">
+            <div className="whs-k">REVIEW</div>
+            <div className="whs-v">{loading ? '…' : pendingReview.length}</div>
+            <div className="whs-sub">pending</div>
           </div>
         </div>
       </div>
 
-      {loading && <div className="mono-label" style={{ padding: '2rem 0' }}>Loading raw/ files…</div>}
+      {loading && <div className="mono-label" style={{ padding:'2rem 0' }}>Loading…</div>}
 
       {!loading && (
         <>
-          {/* Fail-loud alerts — one per failed hook */}
+          {/* Fail-loud alerts */}
           {hooks.filter(h => h.status === 'fail').map(h => (
             <div key={h.name} className="fail-loud-alert">
               <div className="fla-icon">■</div>
@@ -294,101 +379,144 @@ function InspectionView() {
             </div>
           ))}
 
-          {/* Hook enforcement */}
-          <div className="inspection-hooks">
-            <div className="panel-kicker">HOOK ENFORCEMENT · lint/{data?.lintDate || '—'}</div>
-            <div className="hooks-grid">
-              {hooks.map(h => (
-                <div key={h.name} className={`hook-cell hook-${h.status}`}>
-                  <div className="hook-status-dot" />
-                  <div className="hook-name mono">{h.name}</div>
-                  <div className="hook-note">{h.note}</div>
-                </div>
-              ))}
-              {hooks.length === 0 && (
-                <div className="hook-cell hook-pass">
-                  <div className="hook-status-dot" />
-                  <div className="hook-name mono">no lint report found</div>
-                  <div className="hook-note">run lint to populate</div>
-                </div>
-              )}
+          {/* Pending Review — always visible */}
+          <div style={{ marginBottom:'1.5rem' }}>
+            <div className="panel-kicker" style={{ marginBottom:'0.5rem' }}>
+              PENDING REVIEW · {pendingReview.length}
+              {pendingReview.length === 0 && <span style={{ color:'var(--fg-soft)', fontWeight:'normal' }}> — clean</span>}
             </div>
-          </div>
-
-          <div className="inspection-grid">
-            {/* File list + activations */}
-            <div className="inspection-files">
-              <div className="panel-kicker">RAW FILES · {files.length} ({pending} pending)</div>
-              <div className="file-list">
-                {files.map((f, i) => (
-                  <button
-                    key={f.path}
-                    className={`file-row ${i === selectedIdx ? 'selected' : ''} file-${f.status === 'pending' ? 'new' : 'modified'}`}
-                    onClick={() => setSelectedIdx(i)}
-                  >
-                    <span className={`file-status file-status-${f.status === 'pending' ? 'new' : 'modified'}`}>
-                      {f.status === 'pending' ? 'NEW' : 'DONE'}
-                    </span>
-                    <span className="file-path mono">{f.path.replace('raw/','')}</span>
-                    <span className="mono" style={{ fontSize: '10px', color: 'var(--fg-soft)', flexShrink: 0 }}>
-                      {f.sourceType}
-                    </span>
-                  </button>
+            {pendingReview.length > 0 && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+                {pendingReview.map((item, i) => (
+                  <div key={i} style={{ display:'flex', alignItems:'baseline', gap:'0.75rem', padding:'0.4rem 0.6rem', background:'var(--bg-row)', borderRadius:'3px', fontSize:'12px' }}>
+                    <span className="wikilink">[[{item.slug}]]</span>
+                    <span style={{ color:'var(--fg-soft)' }}>{item.description}</span>
+                  </div>
                 ))}
               </div>
-              <div className="panel-divider" />
-              <div className="panel-kicker">ACTIVATIONS · {ACTIVATIONS.length} <span style={{fontSize:'10px',opacity:0.5}}>(mock — next: wire compile)</span></div>
-              <div className="activations-list">
-                {ACTIVATIONS.map((a, i) => (
-                  <div key={i} className="activation-row">
-                    <div className="act-edge">
-                      <span className="wikilink">[[{a.from}]]</span>
-                      <span className="act-relation mono">—{a.relation}→</span>
-                      <span className="wikilink">[[{a.to}]]</span>
+            )}
+          </div>
+
+          {/* Sub-tab bar */}
+          <div className="agenda-controls" style={{ marginBottom:'1rem' }}>
+            {subTabs.map(t => (
+              <button key={t} className={`chip ${subTab === t ? 'active' : ''}`} onClick={() => setSubTab(t)}>
+                {t}
+                {t === 'compile' && recentCompile.length > 0 && <span style={{ marginLeft:'4px', opacity:0.6 }}>{recentCompile.length}</span>}
+                {t === 'queue'   && rawQueue.length > 0        && <span style={{ marginLeft:'4px', opacity:0.6 }}>{rawQueue.length}</span>}
+                {t === 'lint'    && failCount > 0              && <span style={{ marginLeft:'4px', color:'var(--warn)' }}>!</span>}
+              </button>
+            ))}
+          </div>
+
+          {/* ── COMPILE sub-tab ── */}
+          {subTab === 'compile' && (
+            <div>
+              <div className="panel-kicker" style={{ marginBottom:'0.75rem' }}>
+                RECENT COMPILE OUTPUT · {recentCompile.length} articles
+              </div>
+              {recentCompile.length === 0 && (
+                <div style={{ color:'var(--fg-soft)', fontFamily:'var(--mono)', fontSize:'12px' }}>
+                  No recent compile data in INDEX.md Recent Additions.
+                </div>
+              )}
+              <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+                {recentCompile.map((art, i) => {
+                  const st = actionStatus[art.slug];
+                  return (
+                    <div key={i} style={{ display:'flex', alignItems:'baseline', gap:'0.75rem', padding:'0.6rem 0.8rem', background:'var(--bg-row)', borderRadius:'3px', border:'1px solid var(--border)' }}>
+                      <span className="wikilink" style={{ flexShrink:0 }}>[[{art.slug}]]</span>
+                      <span style={{ flex:1, fontSize:'12px', color:'var(--fg-soft)' }}>{art.description}</span>
+                      {st === 'working' && <span className="mono" style={{ fontSize:'10px', color:'var(--fg-soft)' }}>…</span>}
+                      {st === 'flag'    && <span className="mono" style={{ fontSize:'10px', color:'var(--accent)' }}>flagged</span>}
+                      {st === 'delete'  && <span className="mono" style={{ fontSize:'10px', color:'var(--warn)' }}>deleted</span>}
+                      {st === 'error'   && <span className="mono" style={{ fontSize:'10px', color:'var(--warn)' }}>error</span>}
+                      {!st && (
+                        <div style={{ display:'flex', gap:'4px', flexShrink:0 }}>
+                          <button className="mini-btn approve" onClick={() => setActionStatus(s => ({ ...s, [art.slug]: 'accepted' }))}>✓</button>
+                          <button className="mini-btn reject" onClick={() => handleReject(art)}>✕</button>
+                        </div>
+                      )}
+                      {st === 'accepted' && <span className="mono" style={{ fontSize:'10px', color:'var(--pass, #8fbc8f)' }}>accepted</span>}
                     </div>
-                    <div className="act-rationale">{a.rationale}</div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
+          )}
 
-            {/* File content viewer */}
-            <div className="inspection-diff">
-              {sel ? (
-                <>
-                  <div className="diff-head">
-                    <span className={`file-status file-status-${sel.status === 'pending' ? 'new' : 'modified'}`}>
-                      {sel.status === 'pending' ? 'PENDING' : 'COMPILED'}
-                    </span>
-                    <span className="mono diff-path">{sel.path}</span>
-                  </div>
-                  <div style={{ padding: '0.4rem 0.8rem', fontSize: '11px', color: 'var(--fg-soft)', fontFamily: 'var(--mono)', borderBottom: '1px solid var(--border)' }}>
-                    {sel.project && <span style={{ marginRight: '1rem' }}>project: {sel.project}</span>}
-                    {sel.date    && <span style={{ marginRight: '1rem' }}>date: {sel.date}</span>}
-                    {sel.sourceType && <span>type: {sel.sourceType}</span>}
-                  </div>
-                  <div className="diff-body">
-                    {contentLoading && (
-                      <div className="diff-line"><span className="diff-text mono" style={{ color: 'var(--fg-soft)' }}>loading…</span></div>
-                    )}
-                    {!contentLoading && fileContent && fileContent.split('\n').slice(0, 60).map((line, i) => (
-                      <DiffLine key={i} n={i + 1} text={line} add={sel.status === 'pending'} />
-                    ))}
-                    {!contentLoading && fileContent && fileContent.split('\n').length > 60 && (
-                      <div className="diff-more mono">… {fileContent.split('\n').length - 60} more lines</div>
-                    )}
-                    {!contentLoading && !fileContent && (
-                      <div className="diff-line"><span className="diff-text mono" style={{ color: 'var(--fg-soft)' }}>could not load file</span></div>
-                    )}
-                  </div>
-                </>
-              ) : (
-                <div style={{ padding: '2rem', color: 'var(--fg-soft)', fontFamily: 'var(--mono)', fontSize: '12px' }}>
-                  select a file to inspect
+          {/* ── QUEUE sub-tab ── */}
+          {subTab === 'queue' && (
+            <div className="inspection-grid">
+              <div className="inspection-files">
+                <div className="panel-kicker">RAW FILES · {rawQueue.length}</div>
+                <div className="file-list">
+                  {rawQueue.map((f, i) => (
+                    <button
+                      key={f.path}
+                      className={`file-row ${i === selectedQueue ? 'selected' : ''} file-new`}
+                      onClick={() => setSelectedQueue(i)}
+                    >
+                      <span className="file-status file-status-new" style={{ fontSize:'9px' }}>{f.sourceType.toUpperCase()}</span>
+                      <span className="file-path mono">{f.path.replace('raw/','')}</span>
+                    </button>
+                  ))}
                 </div>
+              </div>
+              <div className="inspection-diff">
+                {selQueue ? (
+                  <>
+                    <div className="diff-head">
+                      <span className="mono diff-path">{selQueue.path}</span>
+                    </div>
+                    <div style={{ padding:'0.4rem 0.8rem', fontSize:'11px', color:'var(--fg-soft)', fontFamily:'var(--mono)', borderBottom:'1px solid var(--border)' }}>
+                      {selQueue.project && <span style={{ marginRight:'1rem' }}>project: {selQueue.project}</span>}
+                      {selQueue.date    && <span style={{ marginRight:'1rem' }}>date: {selQueue.date}</span>}
+                      {selQueue.lines   && <span>{selQueue.lines} lines</span>}
+                    </div>
+                    <div className="diff-body">
+                      {queueLoading && <div className="diff-line"><span className="diff-text mono" style={{ color:'var(--fg-soft)' }}>loading…</span></div>}
+                      {!queueLoading && queueContent && queueContent.split('\n').slice(0, 60).map((line, i) => (
+                        <DiffLine key={i} n={i+1} text={line} />
+                      ))}
+                      {!queueLoading && queueContent && queueContent.split('\n').length > 60 && (
+                        <div className="diff-more mono">… {queueContent.split('\n').length - 60} more lines</div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ padding:'2rem', color:'var(--fg-soft)', fontFamily:'var(--mono)', fontSize:'12px' }}>select a file to inspect</div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ── LINT sub-tab ── */}
+          {subTab === 'lint' && (
+            <div>
+              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
+                <div className="panel-kicker">LINT REPORT · {data?.lintDate || '—'}</div>
+                <div className="hooks-grid" style={{ flexWrap:'wrap', gap:'4px' }}>
+                  {hooks.map(h => (
+                    <div key={h.name} className={`hook-cell hook-${h.status}`} style={{ padding:'4px 8px' }}>
+                      <div className="hook-status-dot" />
+                      <div className="hook-name mono" style={{ fontSize:'10px' }}>{h.name}</div>
+                      <div className="hook-note" style={{ fontSize:'10px' }}>{h.note}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <LintSection title="MECHANICAL CHECKS"  content={lintSections.mechanical} />
+              <LintSection title="GRAPH HEALTH"       content={lintSections.graph} />
+              <LintSection title="TOPOLOGY HEALTH"    content={lintSections.topology} />
+              <LintSection title="CONTENT HEALTH"     content={lintSections.content} />
+              <LintSection title="GROWTH SUGGESTIONS" content={lintSections.growth} />
+              <LintSection title="PENDING FIXES"      content={lintSections.fixes} />
+              {!Object.values(lintSections).some(v => v) && (
+                <div style={{ color:'var(--fg-soft)', fontFamily:'var(--mono)', fontSize:'12px' }}>No lint report found. Run lint to populate.</div>
               )}
             </div>
-          </div>
+          )}
         </>
       )}
     </div>
