@@ -1907,7 +1907,13 @@ button { font-family: inherit; }
   transition: background 0.15s, color 0.15s;
 }
 .fla-action:hover { background: color-mix(in oklab, oklch(62% 0.15 28) 15%, transparent); color: var(--fg); }
+.fla-action.flag { border-color: var(--warn); color: var(--warn); }
+.fla-action.flag:hover { background: color-mix(in oklab, var(--warn) 12%, transparent); }
 [data-theme="dark"] .fla-action { color: oklch(75% 0.12 28); border-color: oklch(75% 0.12 28); }
+.fla-action-state { font-family: var(--mono); font-size: 11px; white-space: nowrap; }
+.fla-action-state.done { color: var(--sage); }
+.fla-result { margin-top: 6px; font-family: var(--mono); font-size: 10px; color: var(--fg-soft); line-height: 1.6; }
+.fla-result.error { color: var(--warn); }
 .hook-warn-chip {
   display: inline-flex; align-items: center; gap: 6px;
   background: none; border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--border));
@@ -1916,6 +1922,8 @@ button { font-family: inherit; }
   transition: border-color 0.15s, color 0.15s;
 }
 .hook-warn-chip:hover { border-color: var(--warn); color: var(--fg); }
+.hook-warn-chip.working { opacity: 0.6; cursor: default; }
+.hook-warn-chip:disabled { cursor: default; opacity: 0.5; }
 .hwc-dot {
   width: 6px; height: 6px; border-radius: 50%;
   background: var(--warn); flex-shrink: 0;

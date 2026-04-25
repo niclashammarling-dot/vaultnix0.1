@@ -264,30 +264,31 @@ function LintSection({ title, content }) {
 }
 
 // ─── INSPECTION ──────────────────────────────────────────────────────────────
+// repair: 'auto' = system fixes directly; 'flag' = flags to Pending Review; null = no action
 const HOOK_META = {
   'graph:no-orphans': {
-    section: 'graph',
-    action: (note) => { const m = note.match(/(\d+) orphan/); return m ? `Review ${m[1]} orphan${m[1]==='1'?'':'s'}` : 'Review orphans'; },
+    repair: 'flag',
+    label: (note) => { const m = note.match(/(\d+) orphan/); return m ? `Flag ${m[1]} orphan${m[1]==='1'?'':'s'} for review` : 'Flag orphans for review'; },
   },
   'quality:spreading-activation≥3': {
-    section: 'graph',
-    action: (note) => { const m = note.match(/\((\d+) weak\)/); return m ? `Add links to ${m[1]} article${m[1]==='1'?'':'s'}` : 'Strengthen weak nodes'; },
+    repair: 'flag',
+    label: (note) => { const m = note.match(/\((\d+) weak\)/); return m ? `Flag ${m[1]} weak article${m[1]==='1'?'':'s'} for review` : 'Flag weak articles'; },
   },
   'struct:domain-routing': {
-    section: 'mechanical',
-    action: (note) => { const m = note.match(/(\d+) misroute/); return m ? `Mend ${m[1]} misroute${m[1]==='1'?'':'s'}` : 'Fix misroutes'; },
+    repair: 'auto',
+    label: (note) => { const m = note.match(/(\d+) misroute/); return m ? `Fix ${m[1]} misroute${m[1]==='1'?'':'s'}` : 'Fix misroutes'; },
   },
   'struct:formatting': {
-    section: 'mechanical',
-    action: (note) => { const items = note.split(',').map(s=>s.trim()).filter(Boolean); return items.length ? `Fix ${items.length} formatting error${items.length===1?'':'s'}` : 'Fix formatting'; },
+    repair: 'auto',
+    label: (note) => { const items = note.split(',').map(s=>s.trim()).filter(s => s && !/^\d+/.test(s)); return items.length ? `Fix ${items.length} formatting error${items.length===1?'':'s'}` : 'Fix formatting'; },
   },
   'quality:draft-articles': {
-    section: 'content',
-    action: (note) => { const m = note.match(/(\d+) draft/); return m ? `Review ${m[1]} stalled draft${m[1]==='1'?'':'s'}` : 'Review drafts'; },
+    repair: 'flag',
+    label: (note) => { const m = note.match(/(\d+) draft/); return m ? `Flag ${m[1]} stalled draft${m[1]==='1'?'':'s'} for review` : 'Flag drafts for review'; },
   },
   'topology:isolated-clusters': {
-    section: 'topology',
-    action: () => 'Check isolated clusters',
+    repair: null,
+    label: () => 'Needs lint-fix run',
   },
 };
 
@@ -300,6 +301,35 @@ function InspectionView() {
   const [queueLoading, setQueueLoading]   = React.useState(false);
   const [rejectTarget, setRejectTarget]   = React.useState(null);
   const [actionStatus, setActionStatus]   = React.useState({});
+  const [repairStatus, setRepairStatus]   = React.useState({});   // hook → {state, fixed, log}
+
+  const runRepair = async (hook, note) => {
+    setRepairStatus(s => ({ ...s, [hook]: { state: 'working' } }));
+    try {
+      const res = await fetch('/api/repair', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ hook, note }),
+      });
+      const d = await res.json();
+      if (!res.ok || d.error) {
+        setRepairStatus(s => ({ ...s, [hook]: { state: 'error', msg: d.error || 'failed' } }));
+      } else {
+        setRepairStatus(s => ({ ...s, [hook]: { state: 'done', fixed: d.fixed, skipped: d.skipped, log: d.log } }));
+        // Remove the fixed hook from the visible list
+        if (d.fixed > 0) {
+          setData(prev => prev ? {
+            ...prev,
+            hooks: prev.hooks.map(h => h.name === hook ? { ...h, status: 'pass', note: `fixed ${d.fixed} — re-run lint to verify` } : h),
+            failCount: Math.max(0, (prev.failCount||0) - (prev.hooks.find(h=>h.name===hook)?.status==='fail'?1:0)),
+            warnCount: Math.max(0, (prev.warnCount||0) - (prev.hooks.find(h=>h.name===hook)?.status==='warn'?1:0)),
+          } : prev);
+        }
+      }
+    } catch (e) {
+      setRepairStatus(s => ({ ...s, [hook]: { state: 'error', msg: String(e) } }));
+    }
+  };
 
   React.useEffect(() => {
     fetch('/api/inspection')
@@ -398,30 +428,48 @@ function InspectionView() {
           {/* Fail-loud alerts */}
           {hooks.filter(h => h.status === 'fail').map(h => {
             const meta = HOOK_META[h.name];
-            const actionLabel = meta ? meta.action(h.note) : 'View in Lint';
+            const btnLabel = meta ? meta.label(h.note) : 'View details';
             const cleanNote = h.note.replace(/\s*[—–-]+\s*see .+$/i, '');
+            const rs = repairStatus[h.name];
             return (
               <div key={h.name} className="fail-loud-alert">
                 <div className="fla-icon">■</div>
                 <div className="fla-body">
                   <div className="fla-title">hook <span className="mono">{h.name}</span> FAILED</div>
                   <div className="fla-detail">{cleanNote}</div>
+                  {rs?.state === 'done' && rs.log?.length > 0 && (
+                    <div className="fla-result">
+                      {rs.log.map((l,i) => <div key={i} className="mono" style={{fontSize:'10px',opacity:0.8}}>{l}</div>)}
+                    </div>
+                  )}
+                  {rs?.state === 'error' && <div className="fla-result error">{rs.msg}</div>}
                 </div>
-                <button className="fla-action" onClick={() => setSubTab('lint')}>
-                  {actionLabel} →
-                </button>
+                {meta?.repair && !rs && (
+                  <button className={`fla-action ${meta.repair === 'auto' ? 'auto' : 'flag'}`}
+                    onClick={() => runRepair(h.name, h.note)}>
+                    {btnLabel}
+                  </button>
+                )}
+                {rs?.state === 'working' && <span className="fla-action-state mono">fixing…</span>}
+                {rs?.state === 'done'    && <span className="fla-action-state done">fixed {rs.fixed}</span>}
               </div>
             );
           })}
-          {/* Warn chips — actionable but not alarming */}
+          {/* Warn chips — actionable */}
           {hooks.filter(h => h.status === 'warn').length > 0 && (
             <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'1rem' }}>
               {hooks.filter(h => h.status === 'warn').map(h => {
                 const meta = HOOK_META[h.name];
-                const actionLabel = meta ? meta.action(h.note) : h.note;
+                const rs = repairStatus[h.name];
+                if (rs?.state === 'done') return null;
+                const btnLabel = meta ? meta.label(h.note) : h.note;
                 return (
-                  <button key={h.name} className="hook-warn-chip" onClick={() => setSubTab('lint')}>
-                    <span className="hwc-dot" /> {actionLabel}
+                  <button key={h.name}
+                    className={`hook-warn-chip ${rs?.state === 'working' ? 'working' : ''}`}
+                    onClick={() => meta?.repair && !rs && runRepair(h.name, h.note)}
+                    disabled={!meta?.repair || !!rs}>
+                    <span className="hwc-dot" />
+                    {rs?.state === 'working' ? 'fixing…' : btnLabel}
                   </button>
                 );
               })}
