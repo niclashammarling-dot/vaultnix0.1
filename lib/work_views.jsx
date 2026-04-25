@@ -264,6 +264,33 @@ function LintSection({ title, content }) {
 }
 
 // ─── INSPECTION ──────────────────────────────────────────────────────────────
+const HOOK_META = {
+  'graph:no-orphans': {
+    section: 'graph',
+    action: (note) => { const m = note.match(/(\d+) orphan/); return m ? `Review ${m[1]} orphan${m[1]==='1'?'':'s'}` : 'Review orphans'; },
+  },
+  'quality:spreading-activation≥3': {
+    section: 'graph',
+    action: (note) => { const m = note.match(/\((\d+) weak\)/); return m ? `Add links to ${m[1]} article${m[1]==='1'?'':'s'}` : 'Strengthen weak nodes'; },
+  },
+  'struct:domain-routing': {
+    section: 'mechanical',
+    action: (note) => { const m = note.match(/(\d+) misroute/); return m ? `Mend ${m[1]} misroute${m[1]==='1'?'':'s'}` : 'Fix misroutes'; },
+  },
+  'struct:formatting': {
+    section: 'mechanical',
+    action: (note) => { const items = note.split(',').map(s=>s.trim()).filter(Boolean); return items.length ? `Fix ${items.length} formatting error${items.length===1?'':'s'}` : 'Fix formatting'; },
+  },
+  'quality:draft-articles': {
+    section: 'content',
+    action: (note) => { const m = note.match(/(\d+) draft/); return m ? `Review ${m[1]} stalled draft${m[1]==='1'?'':'s'}` : 'Review drafts'; },
+  },
+  'topology:isolated-clusters': {
+    section: 'topology',
+    action: () => 'Check isolated clusters',
+  },
+};
+
 function InspectionView() {
   const [data, setData]         = React.useState(null);
   const [loading, setLoading]   = React.useState(true);
@@ -369,15 +396,37 @@ function InspectionView() {
       {!loading && (
         <>
           {/* Fail-loud alerts */}
-          {hooks.filter(h => h.status === 'fail').map(h => (
-            <div key={h.name} className="fail-loud-alert">
-              <div className="fla-icon">■</div>
-              <div className="fla-body">
-                <div className="fla-title">hook <span className="mono">{h.name}</span> FAILED</div>
-                <div className="fla-detail">{h.note}</div>
+          {hooks.filter(h => h.status === 'fail').map(h => {
+            const meta = HOOK_META[h.name];
+            const actionLabel = meta ? meta.action(h.note) : 'View in Lint';
+            const cleanNote = h.note.replace(/\s*[—–-]+\s*see .+$/i, '');
+            return (
+              <div key={h.name} className="fail-loud-alert">
+                <div className="fla-icon">■</div>
+                <div className="fla-body">
+                  <div className="fla-title">hook <span className="mono">{h.name}</span> FAILED</div>
+                  <div className="fla-detail">{cleanNote}</div>
+                </div>
+                <button className="fla-action" onClick={() => setSubTab('lint')}>
+                  {actionLabel} →
+                </button>
               </div>
+            );
+          })}
+          {/* Warn chips — actionable but not alarming */}
+          {hooks.filter(h => h.status === 'warn').length > 0 && (
+            <div style={{ display:'flex', flexWrap:'wrap', gap:'6px', marginBottom:'1rem' }}>
+              {hooks.filter(h => h.status === 'warn').map(h => {
+                const meta = HOOK_META[h.name];
+                const actionLabel = meta ? meta.action(h.note) : h.note;
+                return (
+                  <button key={h.name} className="hook-warn-chip" onClick={() => setSubTab('lint')}>
+                    <span className="hwc-dot" /> {actionLabel}
+                  </button>
+                );
+              })}
             </div>
-          ))}
+          )}
 
           {/* Pending Review — always visible */}
           <div style={{ marginBottom:'1.5rem' }}>

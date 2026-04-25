@@ -1899,6 +1899,27 @@ button { font-family: inherit; }
 }
 [data-theme="dark"] .fla-title { color: oklch(82% 0.13 28); }
 .fla-detail { font-family: var(--serif); font-size: 14px; line-height: 1.5; color: var(--fg); margin-top: 4px; }
+.fla-action {
+  background: none; border: 1px solid oklch(62% 0.15 28);
+  color: oklch(62% 0.15 28); font-family: var(--mono); font-size: 11px;
+  padding: 5px 10px; border-radius: 3px; cursor: pointer;
+  white-space: nowrap; letter-spacing: 0.02em;
+  transition: background 0.15s, color 0.15s;
+}
+.fla-action:hover { background: color-mix(in oklab, oklch(62% 0.15 28) 15%, transparent); color: var(--fg); }
+[data-theme="dark"] .fla-action { color: oklch(75% 0.12 28); border-color: oklch(75% 0.12 28); }
+.hook-warn-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: none; border: 1px solid color-mix(in oklab, var(--warn) 40%, var(--border));
+  color: var(--fg-soft); font-family: var(--mono); font-size: 11px;
+  padding: 4px 10px; border-radius: 3px; cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.hook-warn-chip:hover { border-color: var(--warn); color: var(--fg); }
+.hwc-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--warn); flex-shrink: 0;
+}
 .wikilink.broken { color: oklch(62% 0.15 28); text-decoration: line-through wavy; }
 
 
