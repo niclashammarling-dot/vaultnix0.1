@@ -27,7 +27,7 @@ async function getLatestLintFile(): Promise<{ path: string; content: string; sha
   )
   const treeData = await treeRes.json()
   const lintFiles = ((treeData.tree || []) as { path: string }[])
-    .filter(f => f.path.startsWith('lint/') && f.path.endsWith('-lint.md'))
+    .filter(f => f.path.startsWith('lint/lint-check/') && f.path.endsWith('-lint.md'))
     .sort((a, b) => b.path.localeCompare(a.path))
 
   if (!lintFiles[0]) return null

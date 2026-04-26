@@ -116,7 +116,7 @@ export default async function handler(req: any, res: any) {
     const allFiles: { path: string }[] = treeData.tree || []
 
     const lintFiles = allFiles
-      .filter(f => f.path.startsWith('lint/') && f.path.endsWith('-lint.md'))
+      .filter(f => f.path.startsWith('lint/lint-check/') && f.path.endsWith('-lint.md'))
       .sort((a, b) => b.path.localeCompare(a.path))
 
     const rawFiles = allFiles

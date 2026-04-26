@@ -59,7 +59,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   try {
     const tree = await getWikiTree()
 
-    // Find lint files — they live at lint/*.md (not under wiki/)
+    // Find lint files — they live at lint/lint-check/*.md (not under wiki/)
     // getWikiTree only returns wiki/ paths, so we need a separate fetch
     const GITHUB_API = 'https://api.github.com'
     const OWNER = process.env.GITHUB_OWNER!
@@ -73,7 +73,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     )
     const treeData = await treeRes.json()
     const lintFiles = (treeData.tree as { path: string }[])
-      .filter(f => f.path.startsWith('lint/') && f.path.endsWith('-lint.md'))
+      .filter(f => f.path.startsWith('lint/lint-check/') && f.path.endsWith('-lint.md'))
       .map(f => f.path)
       .sort()
       .reverse()
