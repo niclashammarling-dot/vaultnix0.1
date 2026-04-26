@@ -635,6 +635,7 @@ function IdeasView({ go }) {
   const [ideas, setIdeas] = React.useState([]);
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState(0);
+  const [retiring, setRetiring] = React.useState(false);
 
   React.useEffect(() => {
     fetch('/api/ideas')
@@ -642,6 +643,24 @@ function IdeasView({ go }) {
       .then(d => { setIdeas(d.ideas || []); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  function retireIdea(idea) {
+    setRetiring(true);
+    fetch('/api/retire-idea', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: idea.path }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          const next = ideas.filter(i => i.path !== idea.path);
+          setIdeas(next);
+          setSelected(Math.min(selected, Math.max(0, next.length - 1)));
+        }
+      })
+      .finally(() => setRetiring(false));
+  }
 
   const sel = ideas[selected];
 
@@ -710,8 +729,8 @@ function IdeasView({ go }) {
 
               <div className="sd-actions">
                 <button className="btn-primary" onClick={() => go('article', null, sel.path)}>open article →</button>
-                <button className="btn-ghost">mark complete</button>
-                <button className="btn-ghost">retire</button>
+                <button className="btn-ghost" disabled={retiring} onClick={() => retireIdea(sel)}>{retiring ? 'retiring…' : 'retire'}</button>
+                <button className="btn-ghost">implement idea</button>
               </div>
             </div>
           )}
