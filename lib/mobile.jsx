@@ -181,7 +181,7 @@ function MobileStub() {
     const stub = data.stubs[idx];
     setStatus('submitting');
 
-    fetch('/api/corrections', {
+    fetch('/api/audit?resource=corrections', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -287,7 +287,7 @@ function MobileValidate() {
 
   const load = () => {
     setError(null);
-    fetch('/api/validate')
+    fetch('/api/audit?resource=validate')
       .then(r => r.json())
       .then(d => { setQueue(d.pending ?? []); setIdx(0); })
       .catch(e => setError(String(e)));
@@ -300,7 +300,7 @@ function MobileValidate() {
     if (!item || deciding) return;
     setDeciding(true);
 
-    fetch('/api/validate', {
+    fetch('/api/audit?resource=validate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -434,7 +434,7 @@ function MobileCorrections() {
   const [error,   setError]   = React.useState(null);
 
   React.useEffect(() => {
-    fetch('/api/corrections')
+    fetch('/api/audit?resource=corrections')
       .then(r => r.json())
       .then(d => { setData(d); setLoading(false); })
       .catch(e => { setError(String(e)); setLoading(false); });

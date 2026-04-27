@@ -646,10 +646,10 @@ function IdeasView({ go }) {
 
   function retireIdea(idea) {
     setRetiring(true);
-    fetch('/api/retire-idea', {
+    fetch('/api/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: idea.path }),
+      body: JSON.stringify({ action: 'retire', slug: idea.path.split('/').pop()?.replace('.md', ''), path: idea.path }),
     })
       .then(r => r.json())
       .then(d => {

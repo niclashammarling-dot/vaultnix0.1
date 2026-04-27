@@ -257,7 +257,7 @@ function ArticleView({ go, articlePath }) {
       if (!a) return;
       e.preventDefault();
       const slug = a.dataset.slug;
-      fetch(`/api/resolve?slug=${encodeURIComponent(slug)}`)
+      fetch(`/api/articles?slug=${encodeURIComponent(slug)}`)
         .then(r => r.ok ? r.json() : null)
         .then(d => {
           if (d && d.path) go('article', null, d.path);

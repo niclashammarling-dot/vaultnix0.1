@@ -4,9 +4,25 @@ import { getWikiTree } from './_lib/github'
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'GET') return res.status(405).end()
 
-  const { domain } = req.query
+  const { domain, slug } = req.query
+
+  // Slug resolution (absorbed from resolve.ts)
+  if (slug && typeof slug === 'string') {
+    try {
+      const tree = await getWikiTree()
+      const normalized = slug.toLowerCase().replace(/\s+/g, '-')
+      const exact = tree.find(f => f.path.endsWith(`/${normalized}.md`))
+      if (exact) return res.status(200).json({ path: exact.path })
+      const partial = tree.find(f => f.path.includes(normalized))
+      if (partial) return res.status(200).json({ path: partial.path })
+      return res.status(404).json({ error: `No article found for slug: ${slug}` })
+    } catch (e) {
+      return res.status(500).json({ error: String(e) })
+    }
+  }
+
   if (!domain || typeof domain !== 'string') {
-    return res.status(400).json({ error: 'domain required' })
+    return res.status(400).json({ error: 'domain or slug required' })
   }
 
   try {
