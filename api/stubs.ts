@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getFile } from './_lib/github'
+import type { GitHubTreeResponse } from './_lib/github'
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -237,7 +238,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       `${GITHUB_API}/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`,
       { headers: { 'Authorization': `Bearer ${TOKEN}`, 'Accept': 'application/vnd.github.v3+json' } }
     )
-    const treeData = await treeRes.json()
+    const treeData = await treeRes.json() as GitHubTreeResponse
     const lintPaths: string[] = (treeData.tree as { path: string }[])
       .filter(f => f.path.startsWith('lint/lint-check/') && f.path.endsWith('-lint.md'))
       .map(f => f.path)

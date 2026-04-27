@@ -23,13 +23,24 @@ export interface VaultTree {
   sha: string
 }
 
+export interface GitHubFileResponse {
+  content: string
+  sha: string
+  name: string
+  encoding: string
+}
+
+export interface GitHubTreeResponse {
+  tree: Array<{ path: string; type: 'blob' | 'tree'; sha: string }>
+}
+
 export async function getWikiTree(): Promise<VaultTree[]> {
   const res = await fetch(
     `${GITHUB_API}/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`,
     { headers: headers() }
   )
   if (!res.ok) throw new Error(`GitHub tree fetch failed: ${res.status}`)
-  const data = await res.json()
+  const data = await res.json() as GitHubTreeResponse
   return data.tree.filter((f: VaultTree) =>
     f.path.startsWith('wiki/') && f.path.endsWith('.md')
   )
@@ -41,7 +52,7 @@ export async function getFile(path: string): Promise<VaultFile> {
     { headers: headers() }
   )
   if (!res.ok) throw new Error(`File fetch failed: ${path} — ${res.status}`)
-  const data = await res.json()
+  const data = await res.json() as GitHubFileResponse
   const content = Buffer.from(data.content, 'base64').toString('utf-8')
   return { path, name: data.name, content, sha: data.sha }
 }
@@ -113,7 +124,7 @@ export async function updateFile(path: string, content: string, sha: string, mes
     }
   )
   if (!res.ok) {
-    const err = await res.json()
+    const err = await res.json() as { message: string }
     throw new Error(`Update failed: ${err.message}`)
   }
 }
@@ -128,7 +139,7 @@ export async function deleteFile(path: string, sha: string, message: string): Pr
     }
   )
   if (!res.ok) {
-    const err = await res.json()
+    const err = await res.json() as { message: string }
     throw new Error(`Delete failed: ${err.message}`)
   }
 }
@@ -150,7 +161,7 @@ export async function commitRawNote(filename: string, content: string, domain = 
     }
   )
   if (!res.ok) {
-    const err = await res.json()
+    const err = await res.json() as { message: string }
     throw new Error(`Commit failed: ${err.message}`)
   }
 }

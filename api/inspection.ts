@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getFile } from './_lib/github'
+import type { GitHubTreeResponse } from './_lib/github'
 
 const GITHUB_API = 'https://api.github.com'
 const OWNER  = process.env.GITHUB_OWNER!
@@ -112,7 +113,7 @@ export default async function handler(req: any, res: any) {
       `${GITHUB_API}/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`,
       { headers: ghHeaders() }
     )
-    const treeData = await treeRes.json()
+    const treeData = await treeRes.json() as GitHubTreeResponse
     const allFiles: { path: string }[] = treeData.tree || []
 
     const lintFiles = allFiles

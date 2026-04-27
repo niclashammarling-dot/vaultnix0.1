@@ -1,4 +1,5 @@
 import { getFile, updateFile } from './_lib/github'
+import type { GitHubTreeResponse } from './_lib/github'
 
 const GITHUB_API = 'https://api.github.com'
 const OWNER  = process.env.GITHUB_OWNER!
@@ -25,8 +26,8 @@ async function getLatestLintFile(): Promise<{ path: string; content: string; sha
     `${GITHUB_API}/repos/${OWNER}/${REPO}/git/trees/${BRANCH}?recursive=1`,
     { headers: ghHeaders() }
   )
-  const treeData = await treeRes.json()
-  const lintFiles = ((treeData.tree || []) as { path: string }[])
+  const treeData = await treeRes.json() as GitHubTreeResponse
+  const lintFiles = (treeData.tree || [] as { path: string }[])
     .filter(f => f.path.startsWith('lint/lint-check/') && f.path.endsWith('-lint.md'))
     .sort((a, b) => b.path.localeCompare(a.path))
 

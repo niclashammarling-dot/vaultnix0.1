@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
+import type { GitHubFileResponse } from './_lib/github'
 
 const GITHUB_API  = 'https://api.github.com'
 const OWNER       = process.env.GITHUB_OWNER!
@@ -40,7 +41,7 @@ async function ghRead(path: string): Promise<{ content: string; sha: string } | 
   )
   if (res.status === 404) return null
   if (!res.ok) throw new Error(`Read failed: ${path} — ${res.status}`)
-  const data = await res.json()
+  const data = await res.json() as GitHubFileResponse
   return { content: Buffer.from(data.content, 'base64').toString('utf-8'), sha: data.sha }
 }
 
@@ -61,7 +62,7 @@ async function ghWrite(path: string, content: string, sha: string | null, messag
     }
   )
   if (!res.ok) {
-    const err = await res.json()
+    const err = await res.json() as { message: string }
     throw new Error(`Write failed: ${err.message}`)
   }
 }
