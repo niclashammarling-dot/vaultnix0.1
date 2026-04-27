@@ -150,120 +150,365 @@ function MobileCapture() {
 }
 
 function MobileStub() {
+  const [data,     setData]     = React.useState(null);
+  const [idx,      setIdx]      = React.useState(0);
+  const [text,     setText]     = React.useState('');
+  const [status,   setStatus]   = React.useState('idle'); // idle | submitting | filed | skipped | error
+  const [loading,  setLoading]  = React.useState(true);
+  const [error,    setError]    = React.useState(null);
+
+  const SESSION = new Date().toISOString().slice(0, 10) + '-vault-session';
+
+  React.useEffect(() => {
+    fetch('/api/stubs')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(String(e)); setLoading(false); });
+  }, []);
+
+  // Advance to next stub (skip or after filing)
+  const advance = (newStatus) => {
+    setStatus(newStatus);
+    setTimeout(() => {
+      setIdx(i => i + 1);
+      setText('');
+      setStatus('idle');
+    }, 600);
+  };
+
+  const file = () => {
+    if (!text.trim() || status === 'submitting') return;
+    const stub = data.stubs[idx];
+    setStatus('submitting');
+
+    fetch('/api/corrections', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        action:  'FILL',
+        target:  `[[${stub.id}]]`,
+        reason:  text.trim(),
+        session: SESSION,
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setStatus('error'); return; }
+        advance('filed');
+      })
+      .catch(() => setStatus('error'));
+  };
+
+  if (loading) return (
+    <div className="ios-view stub">
+      <div className="ios-h1">Stub</div>
+      <div className="ios-loading mono">loading queue…</div>
+    </div>
+  );
+
+  if (error) return (
+    <div className="ios-view stub">
+      <div className="ios-h1">Stub</div>
+      <div className="ios-error mono">{error}</div>
+    </div>
+  );
+
+  const stubs = data?.stubs ?? [];
+
+  if (!stubs.length || idx >= stubs.length) return (
+    <div className="ios-view stub">
+      <div className="ios-h-row">
+        <div className="ios-h1">Stub</div>
+        <div className="mono ios-priority">{stubs.length}/{stubs.length}</div>
+      </div>
+      <div className="ios-sub mono">queue clear</div>
+      <div className="validate-empty mono">
+        No stubs in queue. Run lint to refresh the stub priority list.
+      </div>
+    </div>
+  );
+
+  const stub = stubs[idx];
+  const rank = idx + 1;
+
   return (
     <div className="ios-view stub">
       <div className="ios-h-row">
         <div className="ios-h1">Stub</div>
-        <div className="mono ios-priority">#1 · 94</div>
+        <div className="mono ios-priority">#{rank} · {stub.score}</div>
       </div>
       <div className="ios-sub mono">the vault needs 30s of your judgment</div>
 
       <div className="stub-card">
-        <div className="stub-card-kicker mono">[[surfacing-skill]]</div>
-        <div className="stub-card-q">
-          What is the <em>central tension</em> between surfacing uncertainty and producing clean outputs?
-        </div>
+        <div className="stub-card-kicker mono">[[{stub.id}]]</div>
+        <div className="stub-card-q">{stub.description}</div>
         <div className="stub-card-meta mono">
-          <span>7 inbound · 4 domains · 12d open</span>
+          {stub.inbound} inbound · {stub.domainCount} {stub.domainCount === 1 ? 'domain' : 'domains'} · {stub.ageLabel} open
         </div>
 
         <div className="stub-card-inputs">
           <div className="sci-label mono">ONE SENTENCE — THE ARGUMENT</div>
-          <textarea className="sci-input" defaultValue="Surfacing is harder than sanitizing because honest outputs look like failures in systems that reward confidence." />
+          <textarea
+            className="sci-input"
+            placeholder="What is the central claim this article needs to make?"
+            value={text}
+            onChange={e => { setText(e.target.value); setStatus('idle'); }}
+          />
         </div>
       </div>
 
       <div className="ios-stub-actions">
-        <button className="ios-btn-ghost">Skip</button>
-        <button className="ios-btn-primary">File → raw/</button>
+        <button
+          className="ios-btn-ghost"
+          onClick={() => advance('skipped')}
+          disabled={status === 'submitting'}
+        >
+          {status === 'skipped' ? 'skipped' : 'Skip'}
+        </button>
+        <button
+          className="ios-btn-primary"
+          onClick={file}
+          disabled={!text.trim() || status === 'submitting' || status === 'filed'}
+        >
+          {status === 'submitting' ? 'filing…' : status === 'filed' ? '✓ filed' : status === 'error' ? 'retry →' : 'File → raw/'}
+        </button>
       </div>
     </div>
   );
 }
 
 function MobileValidate() {
+  const [queue,    setQueue]    = React.useState(null);   // null = loading
+  const [idx,      setIdx]      = React.useState(0);
+  const [deciding, setDeciding] = React.useState(false);
+  const [error,    setError]    = React.useState(null);
+
+  const SESSION = new Date().toISOString().slice(0, 10) + '-vault-session';
+
+  const load = () => {
+    setError(null);
+    fetch('/api/validate')
+      .then(r => r.json())
+      .then(d => { setQueue(d.pending ?? []); setIdx(0); })
+      .catch(e => setError(String(e)));
+  };
+
+  React.useEffect(() => { load(); }, []);
+
+  const decide = (action) => {
+    const item = queue[idx];
+    if (!item || deciding) return;
+    setDeciding(true);
+
+    fetch('/api/validate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        sa_id:       item.id,
+        action,
+        source:      item.source,
+        target:      item.target,
+        session:     SESSION,
+        domain_pair: item.domain_pair,
+        confidence:  item.confidence,
+      }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.error) { setError(d.error); setDeciding(false); return; }
+        setIdx(i => i + 1);
+        setDeciding(false);
+      })
+      .catch(e => { setError(String(e)); setDeciding(false); });
+  };
+
+  const stripBrackets = (s) => s ? s.replace(/^\[\[|\]\]$/g, '') : s;
+
+  // ── Loading ──────────────────────────────────────────────────────────────────
+  if (queue === null) return (
+    <div className="ios-view validate">
+      <div className="ios-h1">Validate</div>
+      <div className="ios-loading mono">loading queue…</div>
+    </div>
+  );
+
+  // ── Error ────────────────────────────────────────────────────────────────────
+  if (error) return (
+    <div className="ios-view validate">
+      <div className="ios-h1">Validate</div>
+      <div className="ios-error mono">{error}</div>
+      <button className="ios-btn-ghost" style={{ marginTop: 12 }} onClick={load}>retry</button>
+    </div>
+  );
+
+  // ── Empty queue ──────────────────────────────────────────────────────────────
+  if (!queue.length || idx >= queue.length) return (
+    <div className="ios-view validate">
+      <div className="ios-h-row">
+        <div className="ios-h1">Validate</div>
+        <div className="mono ios-queue">{queue.length}/{queue.length}</div>
+      </div>
+      <div className="ios-sub mono">queue clear</div>
+      <div className="validate-empty mono">
+        No pending links. The agent will populate this queue during the next compile run
+        when it surfaces cross-domain links at confidence ≥ 0.75.
+      </div>
+      <button className="ios-btn-ghost" style={{ marginTop: 16 }} onClick={load}>refresh</button>
+    </div>
+  );
+
+  // ── Active card ──────────────────────────────────────────────────────────────
+  const item = queue[idx];
+  const pct  = Math.round(item.confidence * 100);
+
   return (
     <div className="ios-view validate">
       <div className="ios-h-row">
         <div className="ios-h1">Validate</div>
-        <div className="mono ios-queue">3/7</div>
+        <div className="mono ios-queue">{idx + 1}/{queue.length}</div>
       </div>
-      <div className="ios-sub mono">agent confidence: 0.82 · swipe to decide</div>
+      <div className="ios-sub mono">
+        confidence: {item.confidence.toFixed(2)} · {item.domain_pair}
+      </div>
 
       <div className="validate-card">
         <div className="vc-header mono">PROPOSED LINK · spreading-activation</div>
+
         <div className="vc-edge">
-          <div className="vc-node">[[bayesian-allocation]]</div>
+          <div className="vc-node">[[{stripBrackets(item.source)}]]</div>
           <div className="vc-relation mono">
             <span>relates-to</span>
             <div className="vc-confidence">
-              <div className="vcc-bar"><div style={{ width: '82%' }} /></div>
-              <span>0.82</span>
+              <div className="vcc-bar"><div style={{ width: `${pct}%` }} /></div>
+              <span>{item.confidence.toFixed(2)}</span>
             </div>
           </div>
-          <div className="vc-node">[[student-reading-progress]]</div>
+          <div className="vc-node">[[{stripBrackets(item.target)}]]</div>
         </div>
-        <div className="vc-rationale">
-          <em>Agent reasoning:</em> both articles reference "prior × likelihood" in classification-and-action contexts. Cross-domain link (apex × teaching).
-        </div>
-        <div className="vc-meta mono">
-          shared: bayesian-inference, classification-and-action, prior
+
+        <div className="vc-fields">
+          <div className="vcf-row">
+            <div className="vcf-label mono">SHARED</div>
+            <div className="vcf-value">{item.shared}</div>
+          </div>
+          <div className="vcf-row">
+            <div className="vcf-label mono">FLOWS</div>
+            <div className="vcf-value">{item.flows}</div>
+          </div>
+          <div className="vcf-row">
+            <div className="vcf-label mono">WITHOUT THIS</div>
+            <div className="vcf-value">{item.without}</div>
+          </div>
         </div>
       </div>
 
       <div className="swipe-actions">
-        <button className="swipe-btn reject">
+        <button
+          className="swipe-btn reject"
+          onClick={() => decide('REJECT')}
+          disabled={deciding}
+        >
           <span className="sa-arrow">←</span>
           <span className="sa-label">Reject</span>
           <span className="sa-desc">encode as Hook</span>
         </button>
-        <button className="swipe-btn accept">
+        <button
+          className="swipe-btn accept"
+          onClick={() => decide('ACCEPT')}
+          disabled={deciding}
+        >
           <span className="sa-label">Accept</span>
           <span className="sa-arrow">→</span>
           <span className="sa-desc">commit link</span>
         </button>
       </div>
+
+      {deciding && <div className="ios-deciding mono">recording…</div>}
     </div>
   );
 }
 
 function MobileCorrections() {
-  const items = [
-    { time: '09:12', kind: 'reject', from: 'flow', to: 'volatility-targeting', note: 'No structural basis. Encoded as hook.', hook: 'NC-412' },
-    { time: '08:47', kind: 'accept', from: 'honesty', to: 'surfacing-skill', note: 'Matches MOC argument.', hook: null },
-    { time: 'Y 22:04', kind: 'reject', from: 'trust', to: 'sector-grid', note: 'Similarity ≠ structure.', hook: 'NC-411' },
-    { time: 'Y 19:33', kind: 'fill', from: 'moc-as-argument', to: null, note: 'Stub filled. Compiled.', hook: null },
-    { time: 'Y 14:02', kind: 'accept', from: 'audit-loop', to: 'bayesian-inference', note: 'Confirmed grounding.', hook: null },
-  ];
+  const [data,    setData]    = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error,   setError]   = React.useState(null);
+
+  React.useEffect(() => {
+    fetch('/api/corrections')
+      .then(r => r.json())
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(String(e)); setLoading(false); });
+  }, []);
+
+  if (loading) return (
+    <div className="ios-view corrections">
+      <div className="ios-h1">Corrections</div>
+      <div className="ios-loading mono">loading…</div>
+    </div>
+  );
+
+  if (error || !data) return (
+    <div className="ios-view corrections">
+      <div className="ios-h1">Corrections</div>
+      <div className="ios-error mono">failed to load corrections log</div>
+    </div>
+  );
+
+  const { entries, byAction, weakestLink } = data;
+  const today = new Date().toISOString().slice(0, 10);
+  const todayCount  = entries.filter(e => e.ts.startsWith(today)).length;
+  const hookCount   = entries.filter(e => e.hook_id).length;
+
+  const fmtTime = (ts) => {
+    const d = new Date(ts);
+    const isToday = d.toISOString().startsWith(today);
+    const hhmm = d.toTimeString().slice(0, 5);
+    return isToday ? hhmm : 'Y ' + hhmm;
+  };
+
+  const stripBrackets = (s) => s ? s.replace(/^\[\[|\]\]$/g, '') : '';
 
   return (
     <div className="ios-view corrections">
       <div className="ios-h1">Corrections</div>
-      <div className="ios-sub mono">5 today · 2 new hooks · weakest: apex↔teaching</div>
-
-      <div className="weakest-link-bar">
-        <div className="wlb-label mono">WEAKEST LINK</div>
-        <div className="wlb-stat">
-          <span>apex ↔ teaching</span>
-          <span className="mono">42% reject</span>
-        </div>
-        <div className="wlb-bar"><div style={{ width: '42%' }} /></div>
+      <div className="ios-sub mono">
+        {todayCount} today · {hookCount} hooks · {byAction.REJECT} rejected
       </div>
 
+      {weakestLink && (
+        <div className="weakest-link-bar">
+          <div className="wlb-label mono">WEAKEST LINK</div>
+          <div className="wlb-stat">
+            <span>{weakestLink.pair}</span>
+            <span className="mono">{weakestLink.rejectRate}% reject</span>
+          </div>
+          <div className="wlb-bar"><div style={{ width: `${weakestLink.rejectRate}%` }} /></div>
+        </div>
+      )}
+
       <div className="correction-feed">
-        {items.map((it, i) => (
-          <div key={i} className={`cf-row cf-${it.kind}`}>
-            <div className="cf-time mono">{it.time}</div>
+        {entries.slice(0, 20).map((it, i) => (
+          <div key={i} className={`cf-row cf-${it.action.toLowerCase()}`}>
+            <div className="cf-time mono">{fmtTime(it.ts)}</div>
             <div className="cf-body">
               <div className="cf-edge mono">
-                <span className={`cf-kind cf-kind-${it.kind}`}>{it.kind.toUpperCase()}</span>
-                <span>[[{it.from}]]{it.to ? ` → [[${it.to}]]` : ''}</span>
+                <span className={`cf-kind cf-kind-${it.action.toLowerCase()}`}>{it.action}</span>
+                <span>
+                  {it.source ? `[[${stripBrackets(it.source)}]]` : ''}
+                  {it.target ? ` → [[${stripBrackets(it.target)}]]` : ''}
+                </span>
               </div>
-              <div className="cf-note">{it.note}</div>
-              {it.hook && <div className="cf-hook mono">hook {it.hook} generated · {it.kind === 'reject' ? 'negative constraint' : ''}</div>}
+              <div className="cf-note">{it.reason}</div>
+              {it.hook_id && (
+                <div className="cf-hook mono">hook {it.hook_id} generated · negative constraint</div>
+              )}
             </div>
           </div>
         ))}
+
+        {entries.length === 0 && (
+          <div className="cf-empty mono">no corrections yet</div>
+        )}
       </div>
     </div>
   );
