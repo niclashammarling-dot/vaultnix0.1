@@ -1,4 +1,4 @@
-// MEM1 Mobile — the specialized sensor companion to the browser hub.
+// Vaultnix 0.1 Mobile — the specialized sensor companion to the browser hub.
 // Shows the iPhone frame with four key screens: Capture Pipe, Micro-Stub
 // flashcard, Validation swipe, Correction Log.
 
@@ -30,7 +30,7 @@ function MobileView() {
             <div className="ios-notch" />
             <div className="ios-status-bar">
               <span className="mono">9:41</span>
-              <span className="ios-sb-right mono">MEM1</span>
+              <span className="ios-sb-right mono">Vaultnix</span>
             </div>
             <div className="ios-screen">
               {screen === 'capture'     && <MobileCapture />}
@@ -202,7 +202,7 @@ function MobileStub() {
         setData({ ...stubData, stubs: pending });
         setLoading(false);
       })
-      .catch(e => { setError(String(e)); setLoading(false); });
+      .catch(e => { setError(String(e)); setData({ stubs: [] }); setLoading(false); });
   }, []);
 
   // Advance to next stub (skip or after filing)
@@ -327,25 +327,38 @@ function MobileStub() {
   );
 }
 
+const REJECT_FIELDS = [
+  { id: 'SHARED_CONCEPT',      label: 'Shared concept',      desc: 'no specific vault node could be named' },
+  { id: 'DIRECTIONAL_REASON',  label: 'Directional reason',  desc: 'asymmetry too weak or absent' },
+  { id: 'SPECIFIC_CONSEQUENCE',label: 'Specific consequence', desc: 'consequence too vague' },
+];
+
 function MobileValidate() {
-  const [queue,    setQueue]    = React.useState(null);   // null = loading
-  const [idx,      setIdx]      = React.useState(0);
-  const [deciding, setDeciding] = React.useState(false);
-  const [error,    setError]    = React.useState(null);
+  const [queue,       setQueue]       = React.useState(null);
+  const [idx,         setIdx]         = React.useState(0);
+  const [deciding,    setDeciding]    = React.useState(false);
+  const [error,       setError]       = React.useState(null);
+  const [rejectMode,  setRejectMode]  = React.useState(false);
+  const [rejectField, setRejectField] = React.useState(null);
+  const [rejectNote,  setRejectNote]  = React.useState('');
 
   const SESSION = new Date().toISOString().slice(0, 10) + '-vault-session';
 
   const load = () => {
     setError(null);
+    setQueue(null);
+    setRejectMode(false);
+    setRejectField(null);
+    setRejectNote('');
     fetch('/api/audit?resource=validate')
       .then(r => r.json())
       .then(d => { setQueue(d.pending ?? []); setIdx(0); })
-      .catch(e => setError(String(e)));
+      .catch(e => { setError(String(e)); setQueue([]); });
   };
 
   React.useEffect(() => { load(); }, []);
 
-  const decide = (action) => {
+  const post = (action, reason) => {
     const item = queue[idx];
     if (!item || deciding) return;
     setDeciding(true);
@@ -358,6 +371,10 @@ function MobileValidate() {
         action,
         source:      item.source,
         target:      item.target,
+        shared:      item.shared || undefined,
+        flows:       item.flows  || undefined,
+        without:     item.without || undefined,
+        reason,
         session:     SESSION,
         domain_pair: item.domain_pair,
         confidence:  item.confidence,
@@ -368,14 +385,28 @@ function MobileValidate() {
         if (d.error) { setError(d.error); setDeciding(false); return; }
         setIdx(i => i + 1);
         setDeciding(false);
+        setRejectMode(false);
+        setRejectField(null);
+        setRejectNote('');
       })
       .catch(e => { setError(String(e)); setDeciding(false); });
   };
 
+  const confirmReject = () => {
+    if (!rejectField) return;
+    const note = rejectNote.trim();
+    const reason = note
+      ? `${rejectField} — ${note}`
+      : rejectField;
+    post('REJECT', reason);
+  };
+
+  const isWikilink = (s) => s && s.startsWith('[[');
   const stripBrackets = (s) => s ? s.replace(/^\[\[|\]\]$/g, '') : s;
+  const displayNode = (s) => isWikilink(s) ? `[[${stripBrackets(s)}]]` : s;
 
   // ── Loading ──────────────────────────────────────────────────────────────────
-  if (queue === null) return (
+  if (queue === null && !error) return (
     <div className="ios-view validate">
       <div className="ios-h1">Validate</div>
       <div className="ios-loading mono">loading queue…</div>
@@ -400,8 +431,8 @@ function MobileValidate() {
       </div>
       <div className="ios-sub mono">queue clear</div>
       <div className="validate-empty mono">
-        No pending links. The agent will populate this queue during the next compile run
-        when it surfaces cross-domain links at confidence ≥ 0.75.
+        All Suggested Connections from recent session audits have been reviewed.
+        New entries appear after the next session audit is filed.
       </div>
       <button className="ios-btn-ghost" style={{ marginTop: 16 }} onClick={load}>refresh</button>
     </div>
@@ -410,6 +441,55 @@ function MobileValidate() {
   // ── Active card ──────────────────────────────────────────────────────────────
   const item = queue[idx];
   const pct  = Math.round(item.confidence * 100);
+
+  // ── Reject mode overlay ──────────────────────────────────────────────────────
+  if (rejectMode) return (
+    <div className="ios-view validate">
+      <div className="ios-h-row">
+        <div className="ios-h1">Reject</div>
+        <div className="mono ios-queue">{idx + 1}/{queue.length}</div>
+      </div>
+      <div className="ios-sub mono">which field fails?</div>
+
+      <div className="reject-field-list">
+        {REJECT_FIELDS.map(f => (
+          <button
+            key={f.id}
+            className={`rfl-btn ${rejectField === f.id ? 'active' : ''}`}
+            onClick={() => setRejectField(f.id)}
+          >
+            <div className="rfl-label mono">{f.label}</div>
+            <div className="rfl-desc">{f.desc}</div>
+          </button>
+        ))}
+      </div>
+
+      <textarea
+        className="ios-textarea"
+        placeholder="Optional note (leave blank to use field name only)"
+        value={rejectNote}
+        onChange={e => setRejectNote(e.target.value)}
+        style={{ marginTop: 8, height: 56 }}
+      />
+
+      <div className="ios-stub-actions" style={{ marginTop: 8 }}>
+        <button
+          className="ios-btn-ghost"
+          onClick={() => { setRejectMode(false); setRejectField(null); setRejectNote(''); }}
+          disabled={deciding}
+        >
+          Cancel
+        </button>
+        <button
+          className="ios-btn-primary"
+          onClick={confirmReject}
+          disabled={!rejectField || deciding}
+        >
+          {deciding ? 'recording…' : 'Confirm reject →'}
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="ios-view validate">
@@ -425,7 +505,7 @@ function MobileValidate() {
         <div className="vc-header mono">PROPOSED LINK · spreading-activation</div>
 
         <div className="vc-edge">
-          <div className="vc-node">[[{stripBrackets(item.source)}]]</div>
+          <div className="vc-node">{displayNode(item.source)}</div>
           <div className="vc-relation mono">
             <span>relates-to</span>
             <div className="vc-confidence">
@@ -433,7 +513,7 @@ function MobileValidate() {
               <span>{item.confidence.toFixed(2)}</span>
             </div>
           </div>
-          <div className="vc-node">[[{stripBrackets(item.target)}]]</div>
+          <div className="vc-node">{displayNode(item.target)}</div>
         </div>
 
         <div className="vc-fields">
@@ -441,21 +521,25 @@ function MobileValidate() {
             <div className="vcf-label mono">SHARED</div>
             <div className="vcf-value">{item.shared}</div>
           </div>
-          <div className="vcf-row">
-            <div className="vcf-label mono">FLOWS</div>
-            <div className="vcf-value">{item.flows}</div>
-          </div>
-          <div className="vcf-row">
-            <div className="vcf-label mono">WITHOUT THIS</div>
-            <div className="vcf-value">{item.without}</div>
-          </div>
+          {item.flows && (
+            <div className="vcf-row">
+              <div className="vcf-label mono">FLOWS</div>
+              <div className="vcf-value">{item.flows}</div>
+            </div>
+          )}
+          {item.without && (
+            <div className="vcf-row">
+              <div className="vcf-label mono">WITHOUT THIS</div>
+              <div className="vcf-value">{item.without}</div>
+            </div>
+          )}
         </div>
       </div>
 
       <div className="swipe-actions">
         <button
           className="swipe-btn reject"
-          onClick={() => decide('REJECT')}
+          onClick={() => setRejectMode(true)}
           disabled={deciding}
         >
           <span className="sa-arrow">←</span>
@@ -464,7 +548,7 @@ function MobileValidate() {
         </button>
         <button
           className="swipe-btn accept"
-          onClick={() => decide('ACCEPT')}
+          onClick={() => post('ACCEPT', 'accepted')}
           disabled={deciding}
         >
           <span className="sa-label">Accept</span>

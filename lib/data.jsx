@@ -1,4 +1,4 @@
-// MEM1 — sample vault content. Content is real-feeling but abbreviated.
+// Vaultnix 0.1 — sample vault content. Content is real-feeling but abbreviated.
 // Based on Niclas-KB vault structure.
 
 const DOMAINS = [
@@ -121,10 +121,10 @@ The failure mode is also shared: the gap. A gap opens whenever a system introduc
 };
 
 const RECENT_CAPTURES = [
-  { time: '10:10', domain: 'knowledge-work', excerpt: 'MEM1 compile ran — spreading activation hit 5 articles, one orphan surfaced (query-invisible-articles).', status: 'compiled' },
+  { time: '10:10', domain: 'knowledge-work', excerpt: 'Vaultnix compile ran — spreading activation hit 5 articles, one orphan surfaced (query-invisible-articles).', status: 'compiled' },
   { time: '12:43', domain: 'apex', excerpt: 'Gate chain restructuring: the 4th gate was ordered before the volatility check. Swapped — ran mechanical_checks.py, all 19 pass.', status: 'compiled' },
   { time: '13:12', domain: 'teaching', excerpt: 'Legilexi retest revealed M4 for 3 students previously M1. HT25 assessment overstated risk.', status: 'pending' },
-  { time: '19:46', domain: 'general', excerpt: 'idea. MEM1 could expose a "surprise" slot in query responses — the thing the vault noticed you didn\'t ask.', status: 'idea' },
+  { time: '19:46', domain: 'general', excerpt: 'idea. Vaultnix could expose a "surprise" slot in query responses — the thing the vault noticed you didn\'t ask.', status: 'idea' },
 ];
 
 const INDEX_HIGHLIGHTS = {
@@ -143,5 +143,5 @@ const BENCHMARK_QUERIES = [
 ];
 
 Object.assign(window, {
-  MEM1_DATA: { DOMAINS, CONCEPTS, SAMPLE_ARTICLE, RECENT_CAPTURES, INDEX_HIGHLIGHTS, BENCHMARK_QUERIES }
+  VAULTNIX_DATA: { DOMAINS, CONCEPTS, SAMPLE_ARTICLE, RECENT_CAPTURES, INDEX_HIGHLIGHTS, BENCHMARK_QUERIES }
 });

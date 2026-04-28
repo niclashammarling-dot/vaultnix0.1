@@ -1,4 +1,4 @@
-// MEM1 — Graph overlay. Small-world visualization of concepts across domains.
+// Vaultnix 0.1 — Graph overlay. Small-world visualization of concepts across domains.
 // Deterministic layout (no d3), CSS transforms only.
 // Observability: cooling nodes (silent drift) + edge-hover signal tooltip.
 

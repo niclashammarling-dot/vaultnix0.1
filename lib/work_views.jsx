@@ -1,6 +1,6 @@
-// MEM1 — Mode A (Work / Builder) sub-modes: Ingest, Agenda, Inspection.
+// Vaultnix 0.1 — Mode A (Work / Builder) sub-modes: Ingest, Agenda, Inspection.
 
-const { DOMAINS, CONCEPTS } = window.MEM1_DATA;
+const { DOMAINS, CONCEPTS } = window.VAULTNIX_DATA;
 
 // ─── INGEST ─────────────────────────────────────────────────────────────────
 function IngestView() {
@@ -28,10 +28,10 @@ function IngestView() {
   };
 
   const recent = [
-    { time: '10:10', sha: 'a4f2e81', domain: 'knowledge-work', bytes: 5978, excerpt: 'MEM1 compile ran — spreading activation hit 5 articles, one orphan surfaced.', queue: 'compile' },
+    { time: '10:10', sha: 'a4f2e81', domain: 'knowledge-work', bytes: 5978, excerpt: 'Vaultnix compile ran — spreading activation hit 5 articles, one orphan surfaced.', queue: 'compile' },
     { time: '12:43', sha: 'c8f1d22', domain: 'apex', bytes: 7422, excerpt: 'Gate chain restructuring: 4th gate ordered before volatility check. Swapped.', queue: 'compile' },
     { time: '13:12', sha: 'ba19e04', domain: 'teaching', bytes: 7757, excerpt: 'Legilexi retest revealed M4 for 3 students previously M1.', queue: 'compile' },
-    { time: '19:46', sha: '4d2b1a7', domain: 'general/ideas', bytes: 318, excerpt: 'idea. MEM1 could expose a "surprise" slot in query responses.', queue: 'review' },
+    { time: '19:46', sha: '4d2b1a7', domain: 'general/ideas', bytes: 318, excerpt: 'idea. Vaultnix could expose a "surprise" slot in query responses.', queue: 'review' },
   ];
 
   return (
@@ -216,6 +216,151 @@ function AgendaView() {
   );
 }
 
+// ─── SA QUALITY TAB ─────────────────────────────────────────────────────────
+
+function ScoreDots({ n, max, warn }) {
+  return (
+    <span style={{ display:'inline-flex', gap:'3px', alignItems:'center' }}>
+      {Array.from({ length: max }).map((_, i) => (
+        <span key={i} style={{
+          width: 7, height: 7, borderRadius: '50%',
+          background: i < n
+            ? (warn ? 'var(--warn)' : 'var(--accent)')
+            : 'var(--border)',
+          display: 'inline-block',
+        }} />
+      ))}
+      <span className="mono" style={{ fontSize:10, marginLeft:3, color:'var(--fg-soft)' }}>{n}/{max}</span>
+    </span>
+  );
+}
+
+function SaTab() {
+  const [data,    setData]    = React.useState(null);
+  const [loading, setLoading] = React.useState(true);
+  const [error,   setError]   = React.useState(null);
+  const [filter,  setFilter]  = React.useState('all'); // all | accept | reject
+
+  React.useEffect(() => {
+    fetch('/api/audit?resource=quality')
+      .then(r => r.ok ? r.json() : Promise.reject(r.status))
+      .then(d => { setData(d); setLoading(false); })
+      .catch(e => { setError(String(e)); setLoading(false); });
+  }, []);
+
+  if (loading) return <div className="mono-label" style={{ padding:'2rem 0' }}>Loading SA quality…</div>;
+  if (error)   return <div className="mono-label" style={{ padding:'2rem 0', color:'var(--warn)' }}>Error: {error}</div>;
+  if (!data)   return null;
+
+  const { scored, sessions, summary } = data;
+
+  const visible = scored.filter(e =>
+    filter === 'all' ? true : filter === 'accept' ? e.action === 'ACCEPT' : e.action === 'REJECT'
+  );
+
+  const fmtRatio = r => r == null ? '—' : r.toFixed(2);
+
+  return (
+    <div>
+      {/* Summary bar */}
+      <div style={{ display:'grid', gridTemplateColumns:'repeat(4, 1fr)', gap:'8px', marginBottom:'1.5rem' }}>
+        {[
+          { k: 'LINK QUALITY', v: summary.mean_link_quality == null ? '—' : fmtRatio(summary.mean_link_quality) + '/3', sub: `${summary.accept_count} accepted` },
+          { k: 'REJECT HONESTY', v: summary.mean_rejection_honesty == null ? '—' : fmtRatio(summary.mean_rejection_honesty) + '/2', sub: `${summary.reject_count} rejected`, warn: summary.hollow_out_canary },
+          { k: 'HOLLOW-OUT', v: summary.hollow_out_canary ? 'DETECTED' : 'clear', sub: 'all-zero rejections', warn: summary.hollow_out_canary },
+          { k: 'SUSPICIOUS SESSIONS', v: summary.suspicious_sessions, sub: '1:1 accept ratio', warn: summary.suspicious_sessions > 0 },
+        ].map(cell => (
+          <div key={cell.k} style={{ padding:'0.75rem', background:'var(--bg-panel, var(--bg-row))', borderRadius:'3px', border:`1px solid ${cell.warn ? 'var(--warn)' : 'var(--border)'}` }}>
+            <div className="mono-label" style={{ marginBottom:'0.25rem', fontSize:'9px', color: cell.warn ? 'var(--warn)' : undefined }}>{cell.k}</div>
+            <div className="mono" style={{ fontSize:'18px', color: cell.warn ? 'var(--warn)' : 'var(--fg)' }}>{cell.v}</div>
+            <div style={{ fontSize:'10px', color:'var(--fg-soft)', marginTop:'2px' }}>{cell.sub}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Coverage per session */}
+      {sessions.length > 0 && (
+        <div style={{ marginBottom:'1.5rem' }}>
+          <div className="panel-kicker" style={{ marginBottom:'0.5rem' }}>COVERAGE · BY SESSION</div>
+          <div style={{ display:'flex', flexDirection:'column', gap:'4px' }}>
+            {sessions.map(s => (
+              <div key={s.id} style={{ display:'flex', alignItems:'center', gap:'1rem', padding:'0.4rem 0.6rem', background:'var(--bg-row)', borderRadius:'3px', fontSize:'11px', border: s.suspicious ? '1px solid var(--warn)' : '1px solid transparent' }}>
+                <span className="mono" style={{ flex:1, overflow:'hidden', textOverflow:'ellipsis', whiteSpace:'nowrap', color:'var(--fg-soft)' }}>{s.id}</span>
+                <span className="mono" style={{ color:'var(--accent)' }}>{s.accept_count}A</span>
+                <span className="mono" style={{ color: s.reject_count === 0 && s.accept_count > 1 ? 'var(--warn)' : 'var(--fg-soft)' }}>{s.reject_count}R</span>
+                <span className="mono" style={{ width:'36px', textAlign:'right', color: s.suspicious ? 'var(--warn)' : 'var(--fg-soft)' }}>{Math.round(s.coverage_ratio * 100)}%</span>
+                {s.suspicious && <span className="mono" style={{ fontSize:'9px', color:'var(--warn)', flexShrink:0 }}>no rejects</span>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Entry filter */}
+      <div className="agenda-controls" style={{ marginBottom:'0.75rem' }}>
+        {['all','accept','reject'].map(f => (
+          <button key={f} className={`chip ${filter === f ? 'active' : ''}`} onClick={() => setFilter(f)}>
+            {f}{f === 'all' ? ` · ${scored.length}` : f === 'accept' ? ` · ${summary.accept_count}` : ` · ${summary.reject_count}`}
+          </button>
+        ))}
+      </div>
+
+      {/* Scored entries */}
+      {visible.length === 0 && (
+        <div style={{ color:'var(--fg-soft)', fontFamily:'var(--mono)', fontSize:'12px', padding:'1rem 0' }}>
+          No {filter === 'all' ? 'spreading-activation' : filter} entries in corrections log.
+        </div>
+      )}
+
+      <div style={{ display:'flex', flexDirection:'column', gap:'6px' }}>
+        {visible.map((e, i) => (
+          <div key={i} style={{ padding:'0.6rem 0.8rem', background:'var(--bg-row)', borderRadius:'3px', border:'1px solid var(--border)' }}>
+            <div style={{ display:'flex', alignItems:'baseline', gap:'0.75rem', marginBottom:'0.4rem' }}>
+              <span className="mono" style={{ fontSize:'10px', color: e.action === 'ACCEPT' ? 'var(--accent)' : 'var(--warn)', flexShrink:0 }}>{e.action}</span>
+              <span className="wikilink" style={{ fontSize:'12px', flexShrink:0 }}>[[{e.source?.replace(/^\[\[|\]\]$/g,'')}]]</span>
+              <span style={{ fontSize:'11px', color:'var(--fg-soft)' }}>→</span>
+              <span className="wikilink" style={{ fontSize:'12px', flexShrink:0 }}>[[{e.target?.replace(/^\[\[|\]\]$/g,'')}]]</span>
+              <span className="mono" style={{ fontSize:'10px', color:'var(--fg-soft)', marginLeft:'auto' }}>{e.domain_pair} · {e.confidence != null ? (e.confidence * 100).toFixed(0) + '%' : '—'}</span>
+            </div>
+
+            {e.action === 'ACCEPT' && e.link_quality && (
+              <div style={{ display:'flex', flexDirection:'column', gap:'3px', marginTop:'0.4rem' }}>
+                {[
+                  { label:'shared',  value: e.shared,  score: e.link_quality.shared  },
+                  { label:'flows',   value: e.flows,   score: e.link_quality.flows   },
+                  { label:'without', value: e.without, score: e.link_quality.without },
+                ].map(row => (
+                  <div key={row.label} style={{ display:'flex', gap:'0.6rem', alignItems:'flex-start', fontSize:'11px' }}>
+                    <span className="mono" style={{ width:'48px', flexShrink:0, color:'var(--fg-soft)', paddingTop:'1px' }}>{row.label}</span>
+                    <span style={{ flex:1, color: row.value ? 'var(--fg)' : 'var(--fg-soft)', fontStyle: row.value ? 'normal' : 'italic' }}>{row.value || 'not recorded'}</span>
+                    <ScoreDots n={row.score} max={1} />
+                  </div>
+                ))}
+                <div style={{ marginTop:'4px', display:'flex', justifyContent:'flex-end' }}>
+                  <ScoreDots n={e.link_quality.total} max={3} />
+                </div>
+              </div>
+            )}
+
+            {e.action === 'REJECT' && e.rejection_honesty && (
+              <div style={{ marginTop:'0.4rem' }}>
+                <div style={{ fontSize:'11px', color:'var(--fg-soft)', marginBottom:'4px' }}>{e.reason}</div>
+                <div style={{ display:'flex', gap:'1rem', alignItems:'center' }}>
+                  <span style={{ fontSize:'10px', color:'var(--fg-soft)' }}>field named</span>
+                  <ScoreDots n={e.rejection_honesty.field_named} max={1} warn={e.rejection_honesty.field_named === 0} />
+                  <span style={{ fontSize:'10px', color:'var(--fg-soft)' }}>distinction</span>
+                  <ScoreDots n={e.rejection_honesty.distinction} max={1} warn={e.rejection_honesty.distinction === 0} />
+                  <span style={{ marginLeft:'auto' }}><ScoreDots n={e.rejection_honesty.total} max={2} warn={e.rejection_honesty.total === 0} /></span>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 // ─── INSPECTION helpers ──────────────────────────────────────────────────────
 
 function RejectModal({ article, onFlag, onDelete, onCancel }) {
@@ -381,7 +526,7 @@ function InspectionView() {
     }
   };
 
-  const subTabs = ['compile', 'queue', 'lint'];
+  const subTabs = ['compile', 'queue', 'lint', 'sa'];
 
   return (
     <div className="work-view inspection">
@@ -502,6 +647,7 @@ function InspectionView() {
                 {t === 'compile' && recentCompile.length > 0 && <span style={{ marginLeft:'4px', opacity:0.6 }}>{recentCompile.length}</span>}
                 {t === 'queue'   && rawQueue.length > 0        && <span style={{ marginLeft:'4px', opacity:0.6 }}>{rawQueue.length}</span>}
                 {t === 'lint'    && failCount > 0              && <span style={{ marginLeft:'4px', color:'var(--warn)' }}>!</span>}
+                {t === 'sa'      && <span style={{ marginLeft:'4px', opacity:0.5, fontSize:'10px' }}>quality</span>}
               </button>
             ))}
           </div>
@@ -587,6 +733,9 @@ function InspectionView() {
               </div>
             </div>
           )}
+
+          {/* ── SA QUALITY sub-tab ── */}
+          {subTab === 'sa' && <SaTab />}
 
           {/* ── LINT sub-tab ── */}
           {subTab === 'lint' && (

@@ -4,7 +4,7 @@ import { getArticlesForQuery } from './_lib/github'
 
 const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
 
-const SYSTEM = `You are MEM1, an agent navigating Niclas's personal knowledge vault (Vaultnix).
+const SYSTEM = `You are Vaultnix, an agent navigating Niclas's personal knowledge vault.
 The vault covers: apex (systematic trading — four gates, 19+ mechanical audit checks), tcx (Teacher Cognitive Exoskeleton — multi-agent), teaching (Dannikeskolan 4A/5A — Lgr22), hiking (Alter-native Hiking — "Walk slowly. Go deep."), knowledge-work (agent-operated knowledge systems, compilation skill, benchmarking), and inspiration.
 
 Given a query and vault context, return a JSON object with exactly this schema:

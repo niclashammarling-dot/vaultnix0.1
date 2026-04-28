@@ -1,6 +1,6 @@
-// MEM1 — Views: Home, Domain, Article, Search, Capture, Benchmark
+// Vaultnix 0.1 — Views: Home, Domain, Article, Search, Capture, Benchmark
 
-const { DOMAINS, CONCEPTS, SAMPLE_ARTICLE, RECENT_CAPTURES, INDEX_HIGHLIGHTS, BENCHMARK_QUERIES } = window.MEM1_DATA;
+const { DOMAINS, CONCEPTS, SAMPLE_ARTICLE, RECENT_CAPTURES, INDEX_HIGHLIGHTS, BENCHMARK_QUERIES } = window.VAULTNIX_DATA;
 
 // ─── HOME ───────────────────────────────────────────────────────────────────
 function HomeView({ go }) {
@@ -29,10 +29,10 @@ function HomeView({ go }) {
             A <em>deliberate</em> external mind.
           </h1>
           <p className="hero-sub">
-            MEM1 is an agent-operated knowledge system. You steer. It writes, links, and audits itself — and tells you loudly what it doesn't yet know.
+            Vaultnix is an agent-operated knowledge system. You steer. It writes, links, and audits itself — and tells you loudly what it doesn't yet know.
           </p>
           <div className="hero-actions">
-            <button className="btn-primary" onClick={() => go('ask')}>Ask MEM1 →</button>
+            <button className="btn-primary" onClick={() => go('ask')}>Ask Vaultnix →</button>
             <button className="btn-ghost" onClick={() => go('capture')}>Capture</button>
             <button className="btn-ghost" onClick={() => go('benchmark')}>Benchmark</button>
           </div>

@@ -1,4 +1,4 @@
-// MEM1 — "Ask MEM1" view. Research-assistant style response with:
+// Vaultnix 0.1 — "Ask" view. Research-assistant style response with:
 //   Traversal Path → Synthesis → Gap Honesty → Surprise
 // Shows the reasoning structure, not a chat bubble.
 
@@ -39,7 +39,7 @@ const SAMPLE_QUERIES = [
     isGapHeavy: true,
   },
   {
-    q: 'Why does MEM1 enforce synthesis at compile time?',
+    q: 'Why does Vaultnix enforce synthesis at compile time?',
     traversal: [
       { hop: 1, node: 'INDEX.md', kind: 'index', note: 'BYOAI section' },
       { hop: 2, node: 'external-cognition', kind: 'concept', note: 'foundation' },
@@ -50,7 +50,7 @@ const SAMPLE_QUERIES = [
     gaps: [
       'No measurement of compile-time cost vs. query-time savings — the claim is structural, not empirical.',
     ],
-    surprise: 'This is why MEM1 is BYOAI: the *synthesis* is the moat, not the model. Any capable LLM can traverse a well-formed graph; no model can fake one at query time.',
+    surprise: 'This is why Vaultnix is BYOAI: the *synthesis* is the moat, not the model. Any capable LLM can traverse a well-formed graph; no model can fake one at query time.',
     sources: ['external-cognition', 'agent-traversal', 'compilation-skill'],
     score: { TD: 8, SQ: 10, GH: 7, SU: 9 },
   },
@@ -135,7 +135,7 @@ function AskView({ variant, style }) {
 
       {/* Input */}
       <div className="ask-input-row">
-        <div className="ask-prompt-label">ASK MEM1</div>
+        <div className="ask-prompt-label">ASK VAULTNIX</div>
         <textarea
           className="ask-textarea"
           placeholder="What do you want to know from the vault?"

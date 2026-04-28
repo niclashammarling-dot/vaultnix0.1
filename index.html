@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>MEM1 — a deliberate external mind</title>
+  <title>Vaultnix 0.1 — a deliberate external mind</title>
   <link rel="stylesheet" href="lib/styles.css">
 </head>
 <body>
@@ -31,7 +31,7 @@
     }/*EDITMODE-END*/;
 
     const getStored = (k, fallback) => {
-      try { return localStorage.getItem('mem1:' + k) || fallback; } catch { return fallback; }
+      try { return localStorage.getItem('vaultnix01:' + k) || fallback; } catch { return fallback; }
     };
 
     // Sub-modes per macro-mode
@@ -61,8 +61,8 @@
       const [navHistory, setNavHistory] = React.useState([]);
       const [articlePath, setArticlePath] = React.useState(null);
 
-      React.useEffect(() => { try { localStorage.setItem('mem1:mode', mode); } catch {} }, [mode]);
-      React.useEffect(() => { try { localStorage.setItem('mem1:view', view); } catch {} }, [view]);
+      React.useEffect(() => { try { localStorage.setItem('vaultnix01:mode', mode); } catch {} }, [mode]);
+      React.useEffect(() => { try { localStorage.setItem('vaultnix01:view', view); } catch {} }, [view]);
 
       React.useEffect(() => {
         document.documentElement.setAttribute('data-variant', tweaks.variant);
@@ -123,14 +123,14 @@
       const submodes = mode === 'work' ? WORK_SUBMODES : USE_SUBMODES;
 
       return (
-        <div className={`shell mode-${mode} ${switching ? 'shell-switching' : ''}`} data-screen-label={`MEM1/${mode}/${view}`}>
+        <div className={`shell mode-${mode} ${switching ? 'shell-switching' : ''}`} data-screen-label={`Vaultnix/${mode}/${view}`}>
 
           {/* ─── GLOBAL MODE BAR — always visible, defines the environment ─── */}
           <div className="mode-bar">
             <div className="mode-bar-inner">
               <div className="mb-brand">
-                <div className="mb-mark">M1</div>
-                <div className="mb-name">MEM1</div>
+                <div className="mb-mark">VN</div>
+                <div className="mb-name">Vaultnix 0.1</div>
               </div>
 
               <div className="mode-toggle" role="tablist">
