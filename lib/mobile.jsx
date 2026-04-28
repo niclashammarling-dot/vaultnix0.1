@@ -159,6 +159,14 @@ function MobileStub() {
 
   const SESSION = new Date().toISOString().slice(0, 10) + '-vault-session';
 
+  // Pre-populate textarea when the current stub changes (hook_fail re-queue)
+  // Must be before any early returns to satisfy Rules of Hooks.
+  React.useEffect(() => {
+    const stub = data?.stubs?.[idx];
+    if (stub?.hookFail?.alternative) setText(stub.hookFail.alternative);
+    else setText('');
+  }, [data?.stubs?.[idx]?.id]);
+
   React.useEffect(() => {
     Promise.all([
       fetch('/api/stubs').then(r => r.json()),
@@ -261,12 +269,6 @@ function MobileStub() {
 
   const stub = stubs[idx];
   const rank = idx + 1;
-
-  // Pre-populate textarea with agent alternative when card first mounts for a hook_fail stub
-  React.useEffect(() => {
-    if (stub?.hookFail?.alternative) setText(stub.hookFail.alternative);
-    else setText('');
-  }, [stub?.id]);
 
   return (
     <div className="ios-view stub">
