@@ -82,16 +82,20 @@ async function nextHookId(): Promise<string> {
 // ── Types ─────────────────────────────────────────────────────────────────────
 
 export interface CorrectionEntry {
-  ts:          string
-  action:      'ACCEPT' | 'REJECT' | 'FILL'
-  sa_id?:      string
-  source?:     string
-  target?:     string
-  reason:      string
-  hook_id:     string | null
-  session:     string
+  ts:           string
+  action:       'ACCEPT' | 'REJECT' | 'FILL'
+  sa_id?:       string
+  source?:      string
+  target?:      string
+  reason:       string
+  hook_id:      string | null
+  session:      string
   domain_pair?: string | null
   confidence?:  number | null
+  // hook_fail write-back — written by compilation agent, never by the interface
+  status?:      'hook_fail'
+  note?:        string   // which hook failed and why
+  alternative?: string  // agent-generated reframed argument
 }
 
 export interface QueueEntry {

@@ -34,11 +34,12 @@ const DOMAIN_MAP: Record<string, string[]> = {
 //   linked-from — `[[slug]]` — linked from: source1, source2   (2026-04-07 format)
 //   prose       — **[[slug]]** (mentioned in ...) or `[[slug]]` (mentioned ...) (2026-04-27 format)
 
-type LintFormat = 'structured' | 'linked-from' | 'prose'
+type LintFormat = 'structured' | 'linked-from' | 'table' | 'prose'
 
 function detectFormat(content: string): LintFormat {
   if (/`\[\[[^\]]+\]\]`\s*[—-]+\s*\d+\s*refs?/m.test(content))       return 'structured'
   if (/`\[\[[^\]]+\]\]`\s*[—-]+\s*linked from:/im.test(content))      return 'linked-from'
+  if (/^\|\s*Stub\s*\|\s*Inbound/im.test(content))                    return 'table'
   return 'prose'
 }
 
@@ -162,6 +163,46 @@ function parseProse(stubSection: string): Stub[] {
   return stubs.sort((a, b) => b.score - a.score)
 }
 
+// ── Parser: table ─────────────────────────────────────────────────────────────
+// | slug | N | yes (...) | yes/no |
+// Column 3 (Cross-domain?) drives domain assignment.
+
+function parseTable(stubSection: string): Stub[] {
+  const stubs: Stub[] = []
+
+  for (const line of stubSection.split('\n')) {
+    // Skip header and separator rows
+    if (/^\|\s*Stub\s*\|/i.test(line))   continue
+    if (/^\|[\s\-:]+\|/.test(line))       continue
+    if (!line.trim().startsWith('|'))     continue
+
+    const cols = line.split('|').map(c => c.trim()).filter((_, i, a) => i > 0 && i < a.length - 1)
+    if (cols.length < 2) continue
+
+    const id       = cols[0].replace(/\[\[|\]\]/g, '').trim()
+    const inbound  = parseInt(cols[1], 10)
+    if (!id || isNaN(inbound)) continue
+
+    const crossRaw    = (cols[2] ?? '').toLowerCase()
+    const isCross     = crossRaw.startsWith('yes')
+    const mocRaw      = (cols[3] ?? '').toLowerCase()
+
+    // Extract domain hint from cross-domain column, e.g. "yes (teaching)"
+    const domainHint  = crossRaw.match(/\(([^)]+)\)/)?.[1]?.split(/[+/]/)[0]?.trim() ?? ''
+    const category    = isCross ? 'cross-domain' : (domainHint || 'general')
+    const domains     = DOMAIN_MAP[category] ?? DOMAIN_MAP[domainHint] ?? ['general']
+    const crossBonus  = isCross ? 25 : 0
+    const score       = Math.min(100, inbound * 6 + crossBonus + (domains.length > 1 ? 10 : 0))
+
+    const description = mocRaw.startsWith('yes')
+      ? `stub — MOC-aligned${mocRaw.includes('open territory') ? ' · Open Territory' : ''}`
+      : 'stub — no MOC alignment noted'
+
+    stubs.push({ id, inbound, domains, domainCount: domains.length, description, score, ageDays: 0, ageLabel: '≥0d' })
+  }
+  return stubs.sort((a, b) => b.score - a.score)
+}
+
 // ── Parse dispatch ────────────────────────────────────────────────────────────
 
 function parseStubs(content: string): Stub[] {
@@ -169,6 +210,7 @@ function parseStubs(content: string): Stub[] {
   const fmt     = detectFormat(content)
   if (fmt === 'structured')   return parseStructured(section)
   if (fmt === 'linked-from')  return parseLinkedFrom(section)
+  if (fmt === 'table')        return parseTable(section)
   return parseProse(section)
 }
 
@@ -177,8 +219,21 @@ function parseStubs(content: string): Stub[] {
 function extractSlugs(content: string): Set<string> {
   const slugs = new Set<string>()
   const stubSection = extractStubSections(content)
+
+  // wikilink format
   for (const m of stubSection.matchAll(/\[\[([^\]]+)\]\]/g)) {
     slugs.add(m[1].trim())
+  }
+
+  // table format — first column of data rows
+  if (detectFormat(content) === 'table') {
+    for (const line of stubSection.split('\n')) {
+      if (/^\|\s*Stub\s*\|/i.test(line) || /^\|[\s\-:]+\|/.test(line)) continue
+      if (!line.trim().startsWith('|')) continue
+      const cols = line.split('|').map(c => c.trim()).filter((_, i, a) => i > 0 && i < a.length - 1)
+      const id = cols[0]?.replace(/\[\[|\]\]/g, '').trim()
+      if (id) slugs.add(id)
+    }
   }
   return slugs
 }

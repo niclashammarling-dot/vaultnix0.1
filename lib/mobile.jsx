@@ -160,9 +160,40 @@ function MobileStub() {
   const SESSION = new Date().toISOString().slice(0, 10) + '-vault-session';
 
   React.useEffect(() => {
-    fetch('/api/stubs')
-      .then(r => r.json())
-      .then(d => { setData(d); setLoading(false); })
+    Promise.all([
+      fetch('/api/stubs').then(r => r.json()),
+      fetch('/api/audit?resource=corrections').then(r => r.json()).catch(() => ({ entries: [] })),
+    ])
+      .then(([stubData, corrData]) => {
+        // Group FILL entries by target — take the latest per target.
+        // A latest entry with status: 'hook_fail' means the stub is back in queue.
+        // A latest entry with no status (clean fill) means the stub is done.
+        const fillsByTarget = {};
+        for (const e of (corrData.entries ?? [])) {
+          if (e.action !== 'FILL' || !e.target) continue;
+          const id = e.target.replace(/^\[\[|\]\]$/g, '');
+          const existing = fillsByTarget[id];
+          if (!existing || e.ts > existing.ts) fillsByTarget[id] = e;
+        }
+
+        // Stubs whose latest FILL has no hook_fail are done; others resurface.
+        const hookFailed = {};
+        const doneFills  = new Set();
+        for (const [id, entry] of Object.entries(fillsByTarget)) {
+          if (entry.status === 'hook_fail') hookFailed[id] = entry;
+          else doneFills.add(id);
+        }
+
+        const pending = (stubData.stubs ?? [])
+          .filter(s => !doneFills.has(s.id))
+          .map(s => hookFailed[s.id]
+            ? { ...s, hookFail: { note: hookFailed[s.id].note, alternative: hookFailed[s.id].alternative } }
+            : s
+          );
+
+        setData({ ...stubData, stubs: pending });
+        setLoading(false);
+      })
       .catch(e => { setError(String(e)); setLoading(false); });
   }, []);
 
@@ -231,13 +262,28 @@ function MobileStub() {
   const stub = stubs[idx];
   const rank = idx + 1;
 
+  // Pre-populate textarea with agent alternative when card first mounts for a hook_fail stub
+  React.useEffect(() => {
+    if (stub?.hookFail?.alternative) setText(stub.hookFail.alternative);
+    else setText('');
+  }, [stub?.id]);
+
   return (
     <div className="ios-view stub">
       <div className="ios-h-row">
         <div className="ios-h1">Stub</div>
         <div className="mono ios-priority">#{rank} · {stub.score}</div>
       </div>
-      <div className="ios-sub mono">the vault needs 30s of your judgment</div>
+      <div className="ios-sub mono">
+        {stub.hookFail ? 'compile failed — refine the argument' : 'the vault needs 30s of your judgment'}
+      </div>
+
+      {stub.hookFail && (
+        <div className="stub-hook-fail">
+          <div className="shf-label mono">HOOK FAIL</div>
+          <div className="shf-note">{stub.hookFail.note}</div>
+        </div>
+      )}
 
       <div className="stub-card">
         <div className="stub-card-kicker mono">[[{stub.id}]]</div>
@@ -247,7 +293,9 @@ function MobileStub() {
         </div>
 
         <div className="stub-card-inputs">
-          <div className="sci-label mono">ONE SENTENCE — THE ARGUMENT</div>
+          <div className="sci-label mono">
+            {stub.hookFail ? 'AGENT ALTERNATIVE — EDIT OR ACCEPT' : 'ONE SENTENCE — THE ARGUMENT'}
+          </div>
           <textarea
             className="sci-input"
             placeholder="What is the central claim this article needs to make?"

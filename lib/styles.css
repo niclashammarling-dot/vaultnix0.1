@@ -1750,6 +1750,13 @@ button { font-family: inherit; }
   cursor: pointer;
 }
 
+.stub-hook-fail {
+  background: oklch(18% 0.04 30); border: 1px solid oklch(40% 0.12 30);
+  border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px;
+}
+.shf-label { font-size: 9px; color: oklch(65% 0.18 30); letter-spacing: 0.14em; }
+.shf-note  { font-size: 11px; color: oklch(78% 0.08 30); line-height: 1.4; }
+
 .stub-card {
   flex: 1; background: #1a1a17; border: 1px solid #2a2a26; border-radius: 14px;
   padding: 18px; display: flex; flex-direction: column; gap: 12px;
