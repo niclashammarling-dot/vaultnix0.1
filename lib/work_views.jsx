@@ -110,10 +110,9 @@ function IngestView() {
           <div className="panel-divider" />
           <div className="panel-kicker">COMPILE</div>
           <div className="next-compile">
-            <div className="nc-desc">light: Steps 0–2, 4, 6, 8 · skips spreading activation</div>
             <button
               className="btn-ghost"
-              style={{ width: '100%', marginTop: 10 }}
+              style={{ width: '100%' }}
               disabled={compileStatus === 'triggering'}
               onClick={() => {
                 setCompileStatus('triggering');
@@ -124,15 +123,15 @@ function IngestView() {
               }}
             >
               {compileStatus === 'triggering' ? 'dispatching…'
-                : compileStatus === 'triggered' ? '✓ running — check Actions'
+                : compileStatus === 'triggered' ? '✓ dispatched'
                 : compileStatus === 'error' ? 'dispatch failed — retry'
                 : 'trigger light compile'}
             </button>
-            {compileStatus === 'triggered' && (
-              <div className="mono-label" style={{ marginTop: 6, fontSize: 10 }}>
-                github.com/{'{owner}'}/{'{repo}'}/actions
-              </div>
-            )}
+            <div className="nc-desc" style={{ marginTop: 6 }}>
+              {compileStatus === 'triggered'
+                ? 'running · github.com/niclashammarling-dot/Niclas-KB/actions'
+                : 'light: Steps 0–2, 4, 6, 8 · skips spreading activation'}
+            </div>
           </div>
         </div>
       </div>
