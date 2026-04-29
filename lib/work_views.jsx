@@ -8,6 +8,7 @@ function IngestView() {
   const [domain, setDomain] = React.useState('knowledge-work');
   const [status, setStatus] = React.useState('idle'); // idle | submitting | committed | error
   const [commitResult, setCommitResult] = React.useState(null);
+  const [compileStatus, setCompileStatus] = React.useState('idle'); // idle | triggering | triggered | error
   const isIdea = text.trim().toLowerCase().startsWith('idea.');
 
   const submit = () => {
@@ -107,11 +108,31 @@ function IngestView() {
             ))}
           </div>
           <div className="panel-divider" />
-          <div className="panel-kicker">NEXT COMPILE</div>
+          <div className="panel-kicker">COMPILE</div>
           <div className="next-compile">
-            <div className="nc-clock mono">02:00:00 UTC · in 6h 34m</div>
-            <div className="nc-desc">3 raw files → structured articles · spreading activation · hook enforcement</div>
-            <button className="btn-ghost" style={{ width: '100%', marginTop: 10 }}>trigger manual compile</button>
+            <div className="nc-desc">light: Steps 0–2, 4, 6, 8 · skips spreading activation</div>
+            <button
+              className="btn-ghost"
+              style={{ width: '100%', marginTop: 10 }}
+              disabled={compileStatus === 'triggering'}
+              onClick={() => {
+                setCompileStatus('triggering');
+                fetch('/api/vault?action=trigger-compile', { method: 'POST' })
+                  .then(r => r.json())
+                  .then(d => setCompileStatus(d.ok ? 'triggered' : 'error'))
+                  .catch(() => setCompileStatus('error'));
+              }}
+            >
+              {compileStatus === 'triggering' ? 'dispatching…'
+                : compileStatus === 'triggered' ? '✓ running — check Actions'
+                : compileStatus === 'error' ? 'dispatch failed — retry'
+                : 'trigger light compile'}
+            </button>
+            {compileStatus === 'triggered' && (
+              <div className="mono-label" style={{ marginTop: 6, fontSize: 10 }}>
+                github.com/{'{owner}'}/{'{repo}'}/actions
+              </div>
+            )}
           </div>
         </div>
       </div>
