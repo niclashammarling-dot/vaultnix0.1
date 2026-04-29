@@ -15,7 +15,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
   const now = new Date()
   const date = now.toISOString().split('T')[0]
-  const time = now.toISOString().split('T')[1].slice(0, 5).replace(':', '')
+  const time = now.toISOString().split('T')[1].slice(0, 8).replace(/:/g, '')
 
   let fileDomain: string
   let filename: string

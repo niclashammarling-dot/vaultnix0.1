@@ -60,8 +60,9 @@ function MobileApp() {
 // ─── Capture ─────────────────────────────────────────────────────────────────
 
 function CaptureTab({ text, setText, project, setProject }) {
-  const [status, setStatus] = React.useState('idle'); // idle | loading | success | error
+  const [status,   setStatus]   = React.useState('idle'); // idle | loading | success | error
   const [filedIdea, setFiledIdea] = React.useState(false);
+  const [errorMsg,  setErrorMsg]  = React.useState('');
 
   const isIdea = /^idea[.:]\s*/i.test(text.trim());
   const routeDest = isIdea ? 'raw/general/ideas/' : `raw/${project}/`;
@@ -69,6 +70,7 @@ function CaptureTab({ text, setText, project, setProject }) {
   const submit = async () => {
     if (!text.trim() || status === 'loading') return;
     setStatus('loading');
+    setErrorMsg('');
     try {
       const res = await fetch('/api/capture', {
         method: 'POST',
@@ -80,7 +82,12 @@ function CaptureTab({ text, setText, project, setProject }) {
       setFiledIdea(!!data.isIdea);
       setStatus('success');
       setText('');
-    } catch {
+    } catch (e) {
+      // TypeError = network failure (offline); Error = server/API failure
+      setErrorMsg(e instanceof TypeError
+        ? 'No connection — note not saved. Try again when online.'
+        : 'Commit failed. Check GitHub token and repo access.'
+      );
       setStatus('error');
     }
   };
@@ -132,9 +139,7 @@ function CaptureTab({ text, setText, project, setProject }) {
         </div>
       )}
       {status === 'error' && (
-        <div className="m-error" style={{ marginTop: 10 }}>
-          Commit failed. Check GitHub token and repo access.
-        </div>
+        <div className="m-error" style={{ marginTop: 10 }}>{errorMsg}</div>
       )}
     </div>
   );
