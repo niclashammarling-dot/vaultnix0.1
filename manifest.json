@@ -1,0 +1,10 @@
+{
+  "name": "Vaultnix",
+  "short_name": "Vaultnix",
+  "description": "A deliberate external mind",
+  "start_url": "/mobile.html",
+  "display": "standalone",
+  "background_color": "#1c1b17",
+  "theme_color": "#1c1b17",
+  "orientation": "portrait"
+}

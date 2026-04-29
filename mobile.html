@@ -1,0 +1,580 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Vaultnix">
+  <meta name="theme-color" content="#1c1b17">
+  <link rel="manifest" href="/manifest.json">
+  <title>Vaultnix</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        oklch(14% 0.008 70);
+      --bg-2:      oklch(16% 0.009 70);
+      --surface:   oklch(18% 0.01 70);
+      --surface-2: oklch(21% 0.012 70);
+      --line:      oklch(28% 0.012 70);
+      --line-soft: oklch(23% 0.01 70);
+      --muted:     oklch(54% 0.012 70);
+      --fg-soft:   oklch(72% 0.015 70);
+      --fg:        oklch(92% 0.015 70);
+      --fg-strong: oklch(97% 0.008 70);
+      --accent:    oklch(78% 0.11 75);
+      --accent-soft: oklch(78% 0.11 75 / 0.18);
+      --sage:      oklch(72% 0.06 150);
+      --sage-soft: oklch(72% 0.06 150 / 0.18);
+      --warn:      oklch(68% 0.12 30);
+      --warn-soft: oklch(68% 0.12 30 / 0.14);
+      --sans: 'Inter Tight', ui-sans-serif, system-ui, sans-serif;
+      --mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, monospace;
+      --tab-h: 56px;
+    }
+
+    html, body { height: 100%; background: var(--bg); color: var(--fg); }
+
+    body {
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      -webkit-tap-highlight-color: transparent;
+      overscroll-behavior: none;
+    }
+
+    /* ── Shell ── */
+
+    .m-shell {
+      display: flex;
+      flex-direction: column;
+      height: 100dvh;
+      padding-top: env(safe-area-inset-top);
+    }
+
+    .m-screen {
+      flex: 1;
+      overflow-y: auto;
+      overflow-x: hidden;
+      overscroll-behavior-y: contain;
+      padding-bottom: calc(var(--tab-h) + env(safe-area-inset-bottom) + 20px);
+    }
+
+    /* ── Tab bar ── */
+
+    .m-tabbar {
+      position: fixed;
+      bottom: 0; left: 0; right: 0;
+      height: calc(var(--tab-h) + env(safe-area-inset-bottom));
+      padding-bottom: env(safe-area-inset-bottom);
+      display: flex;
+      background: var(--bg-2);
+      border-top: 1px solid var(--line);
+      z-index: 100;
+    }
+
+    .m-tab {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 3px;
+      background: none;
+      border: none;
+      cursor: pointer;
+      color: var(--muted);
+      transition: color 0.12s;
+      touch-action: manipulation;
+    }
+
+    .m-tab.active { color: var(--accent); }
+
+    .m-tab-icon {
+      font-size: 17px;
+      font-family: var(--mono);
+      line-height: 1;
+    }
+
+    .m-tab-label {
+      font-size: 9px;
+      font-family: var(--mono);
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    /* ── Shared screen layout ── */
+
+    .m-view {
+      padding: 20px 16px 0;
+    }
+
+    .m-head {
+      margin-bottom: 20px;
+    }
+
+    .m-kicker {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent);
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      margin-bottom: 3px;
+    }
+
+    .m-title {
+      font-size: 21px;
+      font-weight: 600;
+      color: var(--fg-strong);
+      line-height: 1.2;
+    }
+
+    /* ── Shared components ── */
+
+    .m-label {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      margin-bottom: 7px;
+    }
+
+    .m-select {
+      width: 100%;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--fg);
+      font-family: var(--sans);
+      font-size: 15px;
+      appearance: none;
+      outline: none;
+      margin-bottom: 10px;
+    }
+
+    .m-textarea {
+      width: 100%;
+      min-height: 130px;
+      padding: 12px 14px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--fg);
+      font-family: var(--sans);
+      font-size: 15px;
+      line-height: 1.6;
+      resize: none;
+      outline: none;
+      margin-bottom: 10px;
+      -webkit-appearance: none;
+    }
+
+    .m-textarea:focus,
+    .m-select:focus { border-color: var(--accent); }
+
+    .m-textarea::placeholder { color: var(--muted); }
+
+    .m-btn-primary {
+      width: 100%;
+      padding: 14px;
+      background: var(--sage);
+      color: var(--bg);
+      border: none;
+      border-radius: 6px;
+      font-family: var(--mono);
+      font-size: 13px;
+      letter-spacing: 0.06em;
+      cursor: pointer;
+      transition: opacity 0.12s;
+      touch-action: manipulation;
+    }
+    .m-btn-primary:disabled { opacity: 0.38; }
+    .m-btn-primary:active:not(:disabled) { opacity: 0.78; }
+
+    .m-btn-ghost {
+      padding: 12px 16px;
+      background: none;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      color: var(--fg-soft);
+      font-family: var(--mono);
+      font-size: 13px;
+      cursor: pointer;
+      transition: border-color 0.12s;
+      touch-action: manipulation;
+    }
+    .m-btn-ghost:disabled { opacity: 0.38; cursor: not-allowed; }
+    .m-btn-ghost:active { border-color: var(--accent); }
+
+    .m-btn-row {
+      display: flex;
+      gap: 10px;
+    }
+    .m-btn-row .m-btn-ghost { flex: 1; text-align: center; }
+    .m-btn-row .m-btn-primary { flex: 2; }
+
+    .m-loading {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      padding: 36px 0;
+      text-align: center;
+    }
+
+    .m-empty {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      padding: 36px 0;
+      text-align: center;
+      line-height: 1.8;
+    }
+
+    .m-error {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--warn);
+      padding: 12px;
+      background: var(--warn-soft);
+      border: 1px solid oklch(68% 0.12 30 / 0.3);
+      border-radius: 6px;
+      margin-bottom: 12px;
+    }
+
+    .m-success {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--sage);
+      padding: 12px;
+      background: var(--sage-soft);
+      border: 1px solid oklch(72% 0.06 150 / 0.3);
+      border-radius: 6px;
+      margin-top: 10px;
+    }
+
+    /* ── Capture ── */
+
+    .m-route {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .m-route-dest { color: var(--accent); }
+
+    /* ── Stub ── */
+
+    .stub-hook-fail {
+      background: var(--warn-soft);
+      border: 1px solid oklch(68% 0.12 30 / 0.3);
+      border-radius: 6px;
+      padding: 10px 12px;
+      margin-bottom: 12px;
+    }
+
+    .shf-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--warn);
+      letter-spacing: 0.1em;
+      margin-bottom: 4px;
+    }
+
+    .shf-note { font-size: 13px; color: var(--fg-soft); }
+
+    .stub-card {
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+
+    .stub-id {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--accent);
+      margin-bottom: 6px;
+    }
+
+    .stub-q {
+      font-size: 16px;
+      font-weight: 500;
+      color: var(--fg-strong);
+      line-height: 1.35;
+      margin-bottom: 6px;
+    }
+
+    .stub-meta {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      margin-bottom: 14px;
+    }
+
+    /* ── Validate ── */
+
+    .val-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 16px;
+      margin-bottom: 14px;
+    }
+
+    .val-header {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      margin-bottom: 14px;
+    }
+
+    .val-edge {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 16px;
+    }
+
+    .val-node {
+      font-family: var(--mono);
+      font-size: 13px;
+      color: var(--fg);
+      background: var(--surface-2);
+      padding: 9px 11px;
+      border-radius: 4px;
+    }
+
+    .val-relation {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      text-align: center;
+      padding: 2px 0;
+    }
+
+    .val-conf-bar {
+      height: 2px;
+      background: var(--line);
+      border-radius: 1px;
+      margin-top: 5px;
+      overflow: hidden;
+    }
+
+    .val-conf-bar-fill {
+      height: 100%;
+      background: var(--accent);
+      border-radius: 1px;
+    }
+
+    .val-fields { display: flex; flex-direction: column; gap: 10px; }
+
+    .val-field-label {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.1em;
+      margin-bottom: 2px;
+    }
+
+    .val-field-value { font-size: 13px; color: var(--fg-soft); }
+
+    .val-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    .val-btn {
+      padding: 16px 10px;
+      border-radius: 6px;
+      border: none;
+      cursor: pointer;
+      font-family: var(--mono);
+      font-size: 12px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 3px;
+      transition: opacity 0.12s;
+      touch-action: manipulation;
+    }
+    .val-btn:disabled { opacity: 0.38; }
+    .val-btn:active:not(:disabled) { opacity: 0.72; }
+
+    .val-btn-reject {
+      background: var(--warn-soft);
+      color: var(--warn);
+      border: 1px solid oklch(68% 0.12 30 / 0.3);
+    }
+
+    .val-btn-accept {
+      background: var(--sage-soft);
+      color: var(--sage);
+      border: 1px solid oklch(72% 0.06 150 / 0.3);
+    }
+
+    .val-btn-arrow { font-size: 20px; }
+    .val-btn-sub { font-size: 9px; color: var(--muted); }
+
+    /* ── Reject mode ── */
+
+    .reject-field-list {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .rfl-btn {
+      padding: 12px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color 0.12s;
+      touch-action: manipulation;
+    }
+
+    .rfl-btn.active { border-color: var(--warn); }
+
+    .rfl-btn-label {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--fg);
+      margin-bottom: 2px;
+    }
+
+    .rfl-btn-desc { font-size: 12px; color: var(--muted); }
+
+    /* ── Corrections ── */
+
+    .corr-stats {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 16px;
+    }
+
+    .wl-bar {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 12px;
+      margin-bottom: 16px;
+    }
+
+    .wl-header {
+      font-family: var(--mono);
+      font-size: 9px;
+      color: var(--muted);
+      letter-spacing: 0.12em;
+      margin-bottom: 7px;
+    }
+
+    .wl-stat {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 13px;
+      margin-bottom: 7px;
+    }
+
+    .wl-stat-pct {
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--warn);
+    }
+
+    .wl-track {
+      height: 3px;
+      background: var(--line);
+      border-radius: 2px;
+      overflow: hidden;
+    }
+
+    .wl-track-fill {
+      height: 100%;
+      background: var(--warn);
+      border-radius: 2px;
+    }
+
+    .cf-row {
+      display: flex;
+      gap: 10px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line-soft);
+    }
+
+    .cf-time {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--muted);
+      flex-shrink: 0;
+      padding-top: 2px;
+      min-width: 36px;
+    }
+
+    .cf-body { flex: 1; min-width: 0; }
+
+    .cf-edge {
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--fg-soft);
+      margin-bottom: 3px;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      align-items: center;
+    }
+
+    .cf-action {
+      font-size: 9px;
+      letter-spacing: 0.08em;
+      padding: 2px 5px;
+      border-radius: 3px;
+      flex-shrink: 0;
+    }
+
+    .cf-action-accept { background: var(--sage-soft);  color: var(--sage); }
+    .cf-action-reject { background: var(--warn-soft);  color: var(--warn); }
+    .cf-action-fill   { background: var(--accent-soft); color: var(--accent); }
+
+    .cf-note {
+      font-size: 12px;
+      color: var(--muted);
+      margin-top: 2px;
+      word-break: break-word;
+    }
+
+    .cf-hook {
+      font-family: var(--mono);
+      font-size: 10px;
+      color: var(--accent);
+      margin-top: 3px;
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="lib/mobile-app.jsx"></script>
+</body>
+</html>
