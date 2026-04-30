@@ -60,6 +60,8 @@
       const [switching, setSwitching] = React.useState(false);
       const [navHistory, setNavHistory] = React.useState([]);
       const [articlePath, setArticlePath] = React.useState(null);
+      const [compileStatus, setCompileStatus] = React.useState('idle');
+      const [compileCooldownEnd, setCompileCooldownEnd] = React.useState(null);
 
       React.useEffect(() => { try { localStorage.setItem('vaultnix01:mode', mode); } catch {} }, [mode]);
       React.useEffect(() => { try { localStorage.setItem('vaultnix01:view', view); } catch {} }, [view]);
@@ -213,7 +215,7 @@
           {/* ─── MAIN ─── */}
           <main className="main">
             {/* WORK sub-modes */}
-            {mode === 'work' && view === 'ingest'     && <IngestView />}
+            {mode === 'work' && view === 'ingest'     && <IngestView compileStatus={compileStatus} setCompileStatus={setCompileStatus} compileCooldownEnd={compileCooldownEnd} setCompileCooldownEnd={setCompileCooldownEnd} />}
             {mode === 'work' && view === 'ideas'      && <IdeasView go={go} />}
             {mode === 'work' && view === 'agenda'     && <AgendaView />}
             {mode === 'work' && view === 'inspection' && <InspectionView />}
@@ -230,7 +232,7 @@
             {mode === 'use' && view === 'article'   && <ArticleView go={go} articlePath={articlePath} />}
 
             {/* Fallbacks if someone persists an invalid combo */}
-            {mode === 'work' && !['ingest','ideas','agenda','inspection'].includes(view) && <IngestView />}
+            {mode === 'work' && !['ingest','ideas','agenda','inspection'].includes(view) && <IngestView compileStatus={compileStatus} setCompileStatus={setCompileStatus} compileCooldownEnd={compileCooldownEnd} setCompileCooldownEnd={setCompileCooldownEnd} />}
           </main>
 
           {tweaksOpen && (

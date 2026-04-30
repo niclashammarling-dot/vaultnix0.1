@@ -3,13 +3,11 @@
 const { DOMAINS, CONCEPTS } = window.VAULTNIX_DATA;
 
 // ─── INGEST ─────────────────────────────────────────────────────────────────
-function IngestView() {
+function IngestView({ compileStatus, setCompileStatus, compileCooldownEnd, setCompileCooldownEnd }) {
   const [text, setText] = React.useState('');
   const [domain, setDomain] = React.useState('knowledge-work');
   const [status, setStatus] = React.useState('idle'); // idle | submitting | committed | error
   const [commitResult, setCommitResult] = React.useState(null);
-  const [compileStatus, setCompileStatus] = React.useState('idle'); // idle | triggering | triggered | error | cooldown
-  const [compileCooldownEnd, setCompileCooldownEnd] = React.useState(null);
   const isIdea = text.trim().toLowerCase().startsWith('idea.');
 
   const COMPILE_URL = 'https://github.com/niclashammarling-dot/Niclas-KB/actions/workflows/compile.yml';
