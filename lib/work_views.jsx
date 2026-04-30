@@ -8,8 +8,20 @@ function IngestView() {
   const [domain, setDomain] = React.useState('knowledge-work');
   const [status, setStatus] = React.useState('idle'); // idle | submitting | committed | error
   const [commitResult, setCommitResult] = React.useState(null);
-  const [compileStatus, setCompileStatus] = React.useState('idle'); // idle | triggering | triggered | error
+  const [compileStatus, setCompileStatus] = React.useState('idle'); // idle | triggering | triggered | error | cooldown
+  const [compileCooldownEnd, setCompileCooldownEnd] = React.useState(null);
   const isIdea = text.trim().toLowerCase().startsWith('idea.');
+
+  const COMPILE_URL = 'https://github.com/niclashammarling-dot/Niclas-KB/actions/workflows/compile.yml';
+  const COOLDOWN_MS = 5 * 60 * 1000;
+
+  React.useEffect(() => {
+    if (compileStatus !== 'cooldown') return;
+    const remaining = compileCooldownEnd - Date.now();
+    if (remaining <= 0) { setCompileStatus('idle'); return; }
+    const t = setTimeout(() => setCompileStatus('idle'), remaining);
+    return () => clearTimeout(t);
+  }, [compileStatus, compileCooldownEnd]);
 
   const submit = () => {
     if (!text.trim()) return;
@@ -113,23 +125,30 @@ function IngestView() {
             <button
               className="btn-ghost"
               style={{ width: '100%' }}
-              disabled={compileStatus === 'triggering'}
+              disabled={compileStatus === 'triggering' || compileStatus === 'cooldown'}
               onClick={() => {
                 setCompileStatus('triggering');
                 fetch('/api/vault?action=trigger-compile', { method: 'POST' })
                   .then(r => r.json())
-                  .then(d => setCompileStatus(d.ok ? 'triggered' : 'error'))
+                  .then(d => {
+                    if (d.ok) {
+                      setCompileCooldownEnd(Date.now() + COOLDOWN_MS);
+                      setCompileStatus('cooldown');
+                    } else {
+                      setCompileStatus('error');
+                    }
+                  })
                   .catch(() => setCompileStatus('error'));
               }}
             >
               {compileStatus === 'triggering' ? 'dispatching…'
-                : compileStatus === 'triggered' ? '✓ dispatched'
+                : compileStatus === 'cooldown' ? '✓ dispatched · locked 5 min'
                 : compileStatus === 'error' ? 'dispatch failed — retry'
                 : 'trigger light compile'}
             </button>
             <div className="nc-desc" style={{ marginTop: 6 }}>
-              {compileStatus === 'triggered'
-                ? 'running · github.com/niclashammarling-dot/Niclas-KB/actions'
+              {compileStatus === 'cooldown'
+                ? React.createElement('a', { href: COMPILE_URL, target: '_blank', rel: 'noreferrer', style: { color: 'var(--fg-soft)', textDecoration: 'none' } }, 'check run →')
                 : 'light: Steps 0–2, 4, 6, 8 · skips spreading activation'}
             </div>
           </div>
