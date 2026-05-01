@@ -100,12 +100,15 @@ function CaptureTab({ text, setText, project, setProject }) {
   };
 
   const transcribeAudio = async (blob, mimeType) => {
-    const ext  = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
-    const form = new FormData();
-    form.append('file', blob, `capture.${ext}`);
-    form.append('model', 'whisper-1');
+    const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
     try {
-      const res = await fetch('/api/vault?action=transcribe', { method: 'POST', body: form });
+      const arrayBuffer = await blob.arrayBuffer();
+      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const res = await fetch('/api/vault?action=transcribe', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ audio: base64, mimeType, filename: `capture.${ext}` }),
+      });
       if (!res.ok) throw new Error('transcription failed');
       const { text: transcribed } = await res.json();
       setText(prev => prev ? prev + ' ' + transcribed : transcribed);

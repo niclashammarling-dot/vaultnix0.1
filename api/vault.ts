@@ -45,22 +45,20 @@ async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promis
   const apiKey = process.env.OPENAI_API_KEY
   if (!apiKey) { res.status(500).json({ error: 'OPENAI_API_KEY not configured' }); return }
 
-  const contentType = req.headers['content-type'] || ''
-  if (!contentType.includes('multipart/form-data')) {
-    res.status(400).json({ error: 'Expected multipart/form-data' }); return
+  const { audio, mimeType, filename } = req.body as { audio: string; mimeType: string; filename: string }
+  if (!audio || !mimeType || !filename) {
+    res.status(400).json({ error: 'Missing audio, mimeType, or filename' }); return
   }
 
-  // Buffer the body — fetch() can't reliably pipe a Node IncomingMessage stream
-  const chunks: Buffer[] = []
-  for await (const chunk of req) {
-    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
-  }
-  const rawBody = Buffer.concat(chunks)
+  const audioBuffer = Buffer.from(audio, 'base64')
+  const form = new FormData()
+  form.append('file', new Blob([audioBuffer], { type: mimeType }), filename)
+  form.append('model', 'whisper-1')
 
   const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': contentType },
-    body: rawBody,
+    headers: { Authorization: `Bearer ${apiKey}` },
+    body: form,
   })
 
   if (!whisperRes.ok) {
