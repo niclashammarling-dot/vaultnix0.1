@@ -102,8 +102,12 @@ function CaptureTab({ text, setText, project, setProject }) {
   const transcribeAudio = async (blob, mimeType) => {
     const ext = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
     try {
-      const arrayBuffer = await blob.arrayBuffer();
-      const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)));
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      });
       const res = await fetch('/api/vault?action=transcribe', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
