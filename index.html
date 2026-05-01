@@ -233,6 +233,7 @@
 
             {/* Fallbacks if someone persists an invalid combo */}
             {mode === 'work' && !['ingest','ideas','agenda','inspection'].includes(view) && <IngestView compileStatus={compileStatus} setCompileStatus={setCompileStatus} compileCooldownEnd={compileCooldownEnd} setCompileCooldownEnd={setCompileCooldownEnd} />}
+            {mode === 'use'  && !['home','navigator','lens','ask','mobile','search','benchmark','domain','article'].includes(view) && <HomeView go={go} />}
           </main>
 
           {tweaksOpen && (
