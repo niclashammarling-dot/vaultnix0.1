@@ -51,14 +51,21 @@ async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promis
   }
 
   const audioBuffer = Buffer.from(audio, 'base64')
-  const form = new FormData()
-  form.append('file', new Blob([audioBuffer], { type: mimeType }), filename)
-  form.append('model', 'whisper-1')
+  const boundary = `----VaultBoundary${Date.now()}`
+  const CRLF = '\r\n'
+  const body = Buffer.concat([
+    Buffer.from(`--${boundary}${CRLF}Content-Disposition: form-data; name="file"; filename="${filename}"${CRLF}Content-Type: ${mimeType}${CRLF}${CRLF}`),
+    audioBuffer,
+    Buffer.from(`${CRLF}--${boundary}${CRLF}Content-Disposition: form-data; name="model"${CRLF}${CRLF}whisper-1${CRLF}--${boundary}--${CRLF}`),
+  ])
 
   const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
-    headers: { Authorization: `Bearer ${apiKey}` },
-    body: form,
+    headers: {
+      Authorization:  `Bearer ${apiKey}`,
+      'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    },
+    body,
   })
 
   if (!whisperRes.ok) {
