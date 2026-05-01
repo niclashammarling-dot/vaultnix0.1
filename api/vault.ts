@@ -41,19 +41,50 @@ async function triggerCompile(depth: 'light' | 'full'): Promise<void> {
   }
 }
 
+async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) { res.status(500).json({ error: 'OPENAI_API_KEY not configured' }); return }
+
+  const contentType = req.headers['content-type'] || ''
+  if (!contentType.includes('multipart/form-data')) {
+    res.status(400).json({ error: 'Expected multipart/form-data' }); return
+  }
+
+  const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': contentType },
+    // @ts-ignore — req is a Node IncomingMessage readable stream
+    body: req,
+  })
+
+  if (!whisperRes.ok) {
+    console.error('Whisper error:', await whisperRes.text())
+    res.status(502).json({ error: 'Transcription failed' }); return
+  }
+
+  const data = await whisperRes.json() as { text: string }
+  res.status(200).json({ text: data.text })
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end()
 
   if (req.method === 'POST') {
     const action = req.query.action as string
-    if (action !== 'trigger-compile') return res.status(400).json({ error: 'unknown action' })
-    try {
-      await triggerCompile('light')
-      res.status(200).json({ ok: true, depth: 'light' })
-    } catch (e) {
-      res.status(500).json({ error: String(e) })
+    if (action === 'trigger-compile') {
+      try {
+        await triggerCompile('light')
+        res.status(200).json({ ok: true, depth: 'light' })
+      } catch (e) {
+        res.status(500).json({ error: String(e) })
+      }
+      return
     }
-    return
+    if (action === 'transcribe') {
+      try { await handleTranscribe(req, res) } catch (e) { res.status(500).json({ error: String(e) }) }
+      return
+    }
+    return res.status(400).json({ error: 'unknown action' })
   }
 
   if (req.method !== 'GET') return res.status(405).end()

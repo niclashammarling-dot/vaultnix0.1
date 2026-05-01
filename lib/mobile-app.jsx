@@ -3,15 +3,6 @@
 
 const SESSION = new Date().toISOString().slice(0, 10) + '-vault-mobile';
 
-const DOMAINS = [
-  { id: 'apex',           label: 'Apex' },
-  { id: 'TCX',            label: 'TCX' },
-  { id: 'teaching',       label: 'Teaching' },
-  { id: 'hiking',         label: 'Hiking' },
-  { id: 'knowledge-work', label: 'Knowledge' },
-  { id: 'general',        label: 'General' },
-];
-
 const TABS = [
   { id: 'capture',     label: 'Capture',  icon: '+' },
   { id: 'stub',        label: 'Stub',     icon: '◫' },
@@ -60,37 +51,114 @@ function MobileApp() {
 // ─── Capture ─────────────────────────────────────────────────────────────────
 
 function CaptureTab({ text, setText, project, setProject }) {
-  const [status,   setStatus]   = React.useState('idle'); // idle | loading | success | error
-  const [filedIdea, setFiledIdea] = React.useState(false);
-  const [errorMsg,  setErrorMsg]  = React.useState('');
+  const DOMAINS = ['general', 'hiking', 'teaching', 'apex', 'tcx', 'knowledge-work', 'novel'];
 
-  const isIdea = /^idea[.:]\s*/i.test(text.trim());
+  const [status,    setStatus]    = React.useState('idle'); // idle | recording | transcribing | submitting | ok | error | offline
+  const [errorMsg,  setErrorMsg]  = React.useState('');
+  const [recording, setRecording] = React.useState(false);
+
+  const mediaRecorderRef = React.useRef(null);
+  const chunksRef        = React.useRef([]);
+  const holdTimerRef     = React.useRef(null);
+
+  const isIdea    = /^idea[.:]\s*/i.test(text.trim());
   const routeDest = isIdea ? 'raw/general/ideas/' : `raw/${project}/`;
 
-  const submit = async () => {
-    if (!text.trim() || status === 'loading') return;
-    setStatus('loading');
+  // ── Voice ────────────────────────────────────────────────────────────────────
+
+  const startRecording = async () => {
+    setErrorMsg('');
+    try {
+      const stream   = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm'
+                     : MediaRecorder.isTypeSupported('audio/mp4')  ? 'audio/mp4'
+                     : 'audio/ogg';
+
+      const mr = new MediaRecorder(stream, { mimeType });
+      chunksRef.current = [];
+      mr.ondataavailable = e => { if (e.data.size > 0) chunksRef.current.push(e.data); };
+      mr.onstop = () => {
+        stream.getTracks().forEach(t => t.stop());
+        transcribeAudio(new Blob(chunksRef.current, { type: mimeType }), mimeType);
+      };
+      mr.start();
+      mediaRecorderRef.current = mr;
+      setRecording(true);
+      setStatus('recording');
+    } catch {
+      setStatus('error');
+      setErrorMsg('Microphone access denied');
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current?.state === 'recording') {
+      mediaRecorderRef.current.stop();
+      setRecording(false);
+      setStatus('transcribing');
+    }
+  };
+
+  const transcribeAudio = async (blob, mimeType) => {
+    const ext  = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
+    const form = new FormData();
+    form.append('audio', blob, `capture.${ext}`);
+    form.append('model', 'whisper-1');
+    try {
+      const res = await fetch('/api/vault?action=transcribe', { method: 'POST', body: form });
+      if (!res.ok) throw new Error('transcription failed');
+      const { text: transcribed } = await res.json();
+      setText(prev => prev ? prev + ' ' + transcribed : transcribed);
+      setStatus('idle');
+    } catch {
+      setStatus(navigator.onLine ? 'error' : 'offline');
+      setErrorMsg(navigator.onLine ? 'Transcription failed — try again' : 'No connection — transcription not saved');
+    }
+  };
+
+  const onVoiceStart = e => {
+    e.preventDefault();
+    holdTimerRef.current = setTimeout(startRecording, 150);
+  };
+
+  const onVoiceEnd = e => {
+    e.preventDefault();
+    clearTimeout(holdTimerRef.current);
+    if (recording) stopRecording();
+  };
+
+  // ── Commit ───────────────────────────────────────────────────────────────────
+
+  const commit = async () => {
+    if (!text.trim() || status === 'submitting') return;
+    setStatus('submitting');
     setErrorMsg('');
     try {
       const res = await fetch('/api/capture', {
-        method: 'POST',
+        method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: text, project }),
+        body:    JSON.stringify({ content: text.trim(), domain: project }),
       });
       if (!res.ok) throw new Error(`${res.status}`);
       const data = await res.json();
-      setFiledIdea(!!data.isIdea);
-      setStatus('success');
       setText('');
+      setStatus('ok');
+      setTimeout(() => setStatus('idle'), 1800);
     } catch (e) {
-      // TypeError = network failure (offline); Error = server/API failure
+      setStatus(e instanceof TypeError ? 'offline' : 'error');
       setErrorMsg(e instanceof TypeError
-        ? 'No connection — note not saved. Try again when online.'
+        ? 'No connection — note not saved. It is gone.'
         : 'Commit failed. Check GitHub token and repo access.'
       );
-      setStatus('error');
     }
   };
+
+  // ── UI ───────────────────────────────────────────────────────────────────────
+
+  const commitLabel = status === 'submitting' ? 'Committing…'
+                    : status === 'ok'         ? '✓ Filed'
+                    : status === 'error'      ? 'Retry →'
+                    : 'Commit to vault →';
 
   return (
     <div className="m-view">
@@ -99,46 +167,82 @@ function CaptureTab({ text, setText, project, setProject }) {
         <div className="m-title">raw/ · bypasses wiki</div>
       </div>
 
-      <select
-        className="m-select"
-        value={project}
-        onChange={e => { setProject(e.target.value); setStatus('idle'); }}
-      >
+      {/* Domain pills */}
+      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', marginBottom: 8 }}>
         {DOMAINS.map(d => (
-          <option key={d.id} value={d.id}>{d.label}</option>
+          <button
+            key={d}
+            onClick={() => { setProject(d); setStatus('idle'); }}
+            style={{
+              padding:     '4px 10px',
+              borderRadius: 20,
+              border:       '1px solid',
+              fontSize:     11,
+              fontFamily:   'monospace',
+              cursor:       'pointer',
+              background:   project === d ? 'var(--accent, #c8a96e)' : 'transparent',
+              color:        project === d ? '#111'                   : 'var(--text-muted, #8a8f98)',
+              borderColor:  project === d ? 'var(--accent, #c8a96e)' : 'var(--border, #2e2e2e)',
+            }}
+          >
+            {d}
+          </button>
         ))}
-      </select>
+      </div>
 
       <div className="m-route">
         <span>→</span>
         <span className="m-route-dest">{routeDest}</span>
       </div>
 
+      {/* Hold-to-record mic button */}
+      <div
+        onPointerDown={onVoiceStart}
+        onPointerUp={onVoiceEnd}
+        onPointerLeave={onVoiceEnd}
+        style={{
+          display:           'inline-flex',
+          alignItems:        'center',
+          gap:               6,
+          padding:           '6px 12px',
+          marginBottom:      8,
+          borderRadius:      8,
+          border:            `1px solid ${recording ? '#ff3c3c' : 'var(--border, #2e2e2e)'}`,
+          background:        recording ? 'rgba(255,60,60,0.12)' : 'transparent',
+          userSelect:        'none',
+          WebkitUserSelect:  'none',
+          cursor:            'pointer',
+          transition:        'all 0.15s',
+          fontSize:          12,
+          fontFamily:        'monospace',
+          color:             recording ? '#ff3c3c' : 'var(--text-muted, #8a8f98)',
+        }}
+      >
+        <span>{status === 'transcribing' ? '⟳' : recording ? '●' : '🎤'}</span>
+        <span>{recording ? 'release to stop' : status === 'transcribing' ? 'reading…' : 'hold to record'}</span>
+      </div>
+
       <textarea
         className="m-textarea"
         placeholder={"What happened? Decision? Open question?\n\nStart with 'idea.' to route to ideas."}
         value={text}
-        onChange={e => { setText(e.target.value); setStatus('idle'); }}
+        onChange={e => { setText(e.target.value); setStatus('idle'); setErrorMsg(''); }}
         rows={7}
+        disabled={status === 'recording' || status === 'transcribing'}
       />
 
       <button
         className="m-btn-primary"
-        onClick={submit}
-        disabled={!text.trim() || status === 'loading'}
+        onClick={commit}
+        disabled={!text.trim() || status === 'submitting' || status === 'recording' || status === 'transcribing'}
       >
-        {status === 'loading' ? 'Committing…' : 'Commit to vault →'}
+        {commitLabel}
       </button>
 
-      {status === 'success' && (
-        <div className="m-success">
-          {filedIdea
-            ? '✓ Idea filed to raw/general/ideas/'
-            : `✓ Filed to ${routeDest}`
-          }
-        </div>
+      {status === 'ok' && (
+        <div className="m-success">{isIdea ? '✓ Idea filed to raw/general/ideas/' : `✓ Filed to ${routeDest}`}</div>
       )}
-      {status === 'error' && (
+      {(status === 'error' || status === 'offline') && (
         <div className="m-error" style={{ marginTop: 10 }}>{errorMsg}</div>
       )}
     </div>
