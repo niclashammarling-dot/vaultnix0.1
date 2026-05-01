@@ -22,14 +22,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   let markdown: string
 
   if (isIdea) {
-    fileDomain = 'general/ideas'
+    fileDomain = 'inbox/ideas'
     filename = `${date}-${time}-idea.md`
     const title = body.split('\n')[0].slice(0, 80)
     markdown = `---\ntitle: ${title}\ntype: idea\nproject: general/ideas\ndate: ${date}\nstatus: captured\n---\n\n${body}\n`
   } else {
     const project = domain || 'general'
     const month = date.slice(0, 7)
-    fileDomain = `notes/${month}`
+    fileDomain = `inbox/${month}`
     filename = `${date}-${time}-capture.md`
     markdown = `---\ntitle: Quick capture ${date}\ntype: capture\nproject: ${project}\ndate: ${date}\ntags: [${project}/capture]\nstatus: draft\n---\n\n## What We Worked On\n${body}\n\n## Decisions Made\n\n\n## Open Threads\n\n`
   }
