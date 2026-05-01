@@ -50,11 +50,17 @@ async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promis
     res.status(400).json({ error: 'Expected multipart/form-data' }); return
   }
 
+  // Buffer the body — fetch() can't reliably pipe a Node IncomingMessage stream
+  const chunks: Buffer[] = []
+  for await (const chunk of req) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk))
+  }
+  const rawBody = Buffer.concat(chunks)
+
   const whisperRes = await fetch('https://api.openai.com/v1/audio/transcriptions', {
     method: 'POST',
     headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': contentType },
-    // @ts-ignore — req is a Node IncomingMessage readable stream
-    body: req,
+    body: rawBody,
   })
 
   if (!whisperRes.ok) {

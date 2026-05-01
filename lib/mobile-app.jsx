@@ -102,7 +102,7 @@ function CaptureTab({ text, setText, project, setProject }) {
   const transcribeAudio = async (blob, mimeType) => {
     const ext  = mimeType.includes('mp4') ? 'm4a' : mimeType.includes('ogg') ? 'ogg' : 'webm';
     const form = new FormData();
-    form.append('audio', blob, `capture.${ext}`);
+    form.append('file', blob, `capture.${ext}`);
     form.append('model', 'whisper-1');
     try {
       const res = await fetch('/api/vault?action=transcribe', { method: 'POST', body: form });
