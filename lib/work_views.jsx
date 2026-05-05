@@ -985,7 +985,6 @@ function IdeasView({ go }) {
                   {saveMsg && <div className="mono-label" style={{ marginBottom: '0.75rem', color: 'var(--fg-soft)' }}>{saveMsg}</div>}
                   <div className="sd-actions">
                     <button className="btn-primary" onClick={() => setEvolving(true)}>evolve idea →</button>
-                    <button className="btn-ghost" onClick={() => go('article', null, sel.path)}>open article</button>
                     <button className="btn-ghost" disabled={flagging} onClick={() => flagIdea(sel)}>{flagging ? 'flagging…' : 'implement idea'}</button>
                     <button className="btn-ghost" disabled={retiring} onClick={() => retireIdea(sel)}>{retiring ? 'retiring…' : 'retire'}</button>
                   </div>
