@@ -33,6 +33,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
           .slice(0, 3)
         return { path, slug, title, date, status, tags, summary, openQs }
       })
+      .filter(idea => idea.status !== 'retired')
       .sort((a, b) => b.date.localeCompare(a.date))
 
     res.status(200).json({ ideas })

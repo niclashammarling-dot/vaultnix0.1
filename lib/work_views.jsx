@@ -822,6 +822,11 @@ function IdeasView({ go }) {
   const [loading, setLoading] = React.useState(true);
   const [selected, setSelected] = React.useState(0);
   const [retiring, setRetiring] = React.useState(false);
+  const [flagging, setFlagging] = React.useState(false);
+  const [evolving, setEvolving] = React.useState(false);
+  const [evolveText, setEvolveText] = React.useState('');
+  const [saving, setSaving] = React.useState(false);
+  const [saveMsg, setSaveMsg] = React.useState('');
 
   React.useEffect(() => {
     fetch('/api/ideas')
@@ -829,6 +834,13 @@ function IdeasView({ go }) {
       .then(d => { setIdeas(d.ideas || []); setLoading(false); })
       .catch(() => setLoading(false));
   }, []);
+
+  // Reset evolve state whenever selection changes
+  React.useEffect(() => {
+    setEvolving(false);
+    setEvolveText('');
+    setSaveMsg('');
+  }, [selected]);
 
   function retireIdea(idea) {
     setRetiring(true);
@@ -846,6 +858,39 @@ function IdeasView({ go }) {
         }
       })
       .finally(() => setRetiring(false));
+  }
+
+  function flagIdea(idea) {
+    setFlagging(true);
+    fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'flag', slug: idea.path.split('/').pop()?.replace('.md', ''), path: idea.path, title: idea.title }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) setSaveMsg('Added to Pending Commitments.');
+      })
+      .finally(() => setFlagging(false));
+  }
+
+  function saveEvolve(idea) {
+    if (!evolveText.trim()) return;
+    setSaving(true);
+    fetch('/api/review', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'evolve', slug: idea.path.split('/').pop()?.replace('.md', ''), path: idea.path, content: evolveText }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.ok) {
+          setSaveMsg('Draft saved.');
+          setEvolving(false);
+          setEvolveText('');
+        }
+      })
+      .finally(() => setSaving(false));
   }
 
   const sel = ideas[selected];
@@ -913,11 +958,39 @@ function IdeasView({ go }) {
                 </div>
               )}
 
-              <div className="sd-actions">
-                <button className="btn-primary" onClick={() => go('article', null, sel.path)}>open article →</button>
-                <button className="btn-ghost" disabled={retiring} onClick={() => retireIdea(sel)}>{retiring ? 'retiring…' : 'retire'}</button>
-                <button className="btn-ghost">implement idea</button>
-              </div>
+              {evolving ? (
+                <div className="sd-section">
+                  <div className="mono-label" style={{ marginBottom: '0.75rem' }}>DRAFT / EXPAND / RESPOND</div>
+                  {sel.openQs.length > 0 && (
+                    <div style={{ marginBottom: '0.75rem', padding: '0.6rem 0.75rem', background: 'var(--bg-elevated, #1a1a18)', borderRadius: '4px', fontSize: '12px', color: 'var(--fg-soft)' }}>
+                      {sel.openQs.map((q, i) => <div key={i} style={{ marginBottom: i < sel.openQs.length - 1 ? '0.3rem' : 0 }}>{q.replace(/^- /, '')}</div>)}
+                    </div>
+                  )}
+                  <textarea
+                    className="work-textarea"
+                    value={evolveText}
+                    onChange={e => setEvolveText(e.target.value)}
+                    placeholder="Draft, expand, answer questions, note constraints..."
+                    rows={5}
+                    autoFocus
+                  />
+                  {saveMsg && <div className="mono-label" style={{ marginTop: '0.5rem', color: 'var(--fg-soft)' }}>{saveMsg}</div>}
+                  <div className="sd-actions" style={{ marginTop: '0.75rem' }}>
+                    <button className="btn-primary" disabled={saving || !evolveText.trim()} onClick={() => saveEvolve(sel)}>{saving ? 'saving…' : 'save draft →'}</button>
+                    <button className="btn-ghost" onClick={() => { setEvolving(false); setEvolveText(''); }}>cancel</button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  {saveMsg && <div className="mono-label" style={{ marginBottom: '0.75rem', color: 'var(--fg-soft)' }}>{saveMsg}</div>}
+                  <div className="sd-actions">
+                    <button className="btn-primary" onClick={() => setEvolving(true)}>evolve idea →</button>
+                    <button className="btn-ghost" onClick={() => go('article', null, sel.path)}>open article</button>
+                    <button className="btn-ghost" disabled={flagging} onClick={() => flagIdea(sel)}>{flagging ? 'flagging…' : 'implement idea'}</button>
+                    <button className="btn-ghost" disabled={retiring} onClick={() => retireIdea(sel)}>{retiring ? 'retiring…' : 'retire'}</button>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </div>

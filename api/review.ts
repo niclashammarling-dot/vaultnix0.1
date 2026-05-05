@@ -5,7 +5,7 @@ import { getFile, updateFile, deleteFile } from './_lib/github'
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method !== 'POST') return res.status(405).end()
 
-  const { action, path, slug, title } = req.body
+  const { action, path, slug, title, content: noteText } = req.body
   if (!action || !slug) return res.status(400).json({ error: 'action and slug required' })
 
   try {
@@ -45,6 +45,24 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         content = file.content.replace(/^(date:.+)$/m, '$1\nstatus: retired')
       }
       await updateFile(path, content, file.sha, `ideas: retire ${path.split('/').pop()?.replace('.md', '')}`)
+      res.status(200).json({ ok: true })
+
+    } else if (action === 'evolve') {
+      if (!path) return res.status(400).json({ error: 'path required for evolve' })
+      if (!noteText?.trim()) return res.status(400).json({ error: 'content required for evolve' })
+      const file = await getFile(path)
+      const date = new Date().toISOString().slice(0, 10)
+      const entry = `\n**${date}:** ${noteText.trim()}`
+      let content = file.content
+      if (/\n## Notes/.test(content)) {
+        // Append inside existing Notes section, before next ## or EOF
+        content = content.replace(/(## Notes\n)([\s\S]*?)(\n## |$)/, (_, header, body, after) => {
+          return header + body.replace(/\n+$/, '') + '\n' + entry + '\n' + after
+        })
+      } else {
+        content = content.replace(/\n+$/, '') + '\n\n## Notes\n' + entry + '\n'
+      }
+      await updateFile(path, content, file.sha, `ideas: evolve [[${slug}]]`)
       res.status(200).json({ ok: true })
 
     } else {
