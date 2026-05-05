@@ -41,7 +41,7 @@ function parseRecentCompile(index: string, tree: { path: string }[]) {
 function parseFrontmatter(content: string) {
   const block = content.match(/^---\n([\s\S]+?)\n---/)?.[1] || ''
   const get = (k: string) => block.match(new RegExp(`^${k}:\\s*(.+)$`, 'm'))?.[1]?.trim() || ''
-  return { title: get('title'), project: get('project'), date: get('date'), status: get('status') }
+  return { title: get('title'), project: get('project'), date: get('date'), status: get('status'), compiled: get('compiled') }
 }
 
 function sourceType(path: string) {
@@ -139,9 +139,13 @@ export default async function handler(req: any, res: any) {
     // Recent compile output
     const recentCompile = parseRecentCompile(indexFile.content, wikiFiles)
 
-    // Raw queue
+    // Raw queue — only files not yet compiled
     const rawQueue = rawResults
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .filter(r => {
+        const fm = parseFrontmatter(r.value.content)
+        return fm.compiled !== 'true'
+      })
       .map(r => {
         const { path, content } = r.value
         const fm = parseFrontmatter(content)
