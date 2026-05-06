@@ -90,17 +90,22 @@ function deriveHooks(lint: string) {
 }
 
 function parseLintSections(lint: string) {
-  const extract = (header: string) =>
-    lint.match(new RegExp(`## ${header}\\n([\\s\\S]+?)(?=\\n## |\\Z)`))?.[1]?.trim() || ''
+  const mechanical = lint.match(/## Mechanical Checks\n([\s\S]+?)(?=\n---|\n# )/)?.[1]?.trim() || ''
 
-  return {
-    mechanical:  extract('Mechanical Checks'),
-    graph:       extract('Graph Health'),
-    topology:    extract('Topology Health'),
-    content:     extract('Content Health'),
-    growth:      extract('Growth Suggestions'),
-    fixes:       extract('Pending Fixes'),
+  const domains: { label: string; graph: string; topology: string; content: string; growth: string }[] = []
+  const domainRe = /# Domain Lint — ([^\n]+)([\s\S]+?)(?=\n# Domain Lint —|\n# Cross-Domain Lint|$)/g
+  let m
+  while ((m = domainRe.exec(lint)) !== null) {
+    const label = m[1].trim()
+    const block = m[2]
+    const sec = (name: string) =>
+      block.match(new RegExp(`## ${name}\\n([\\s\\S]+?)(?=\\n## |\\n# |\\n---|$)`))?.[1]?.trim() || ''
+    domains.push({ label, graph: sec('Graph Health'), topology: sec('Topology Health'), content: sec('Content Health'), growth: sec('Growth Suggestions') })
   }
+
+  const crossDomain = lint.match(/# Cross-Domain Lint\n([\s\S]+?)(?=\n# |$)/)?.[1]?.trim() || ''
+
+  return { mechanical, domains, crossDomain }
 }
 
 // ── Handler ──────────────────────────────────────────────────────────────────

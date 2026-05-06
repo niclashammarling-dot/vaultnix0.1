@@ -424,22 +424,127 @@ function RejectModal({ article, onFlag, onDelete, onCancel }) {
   );
 }
 
-function LintSection({ title, content }) {
-  const [open, setOpen] = React.useState(true);
+function renderInline(text) {
+  if (!text) return null;
+  const patterns = [
+    { re: /\*\*(.+?)\*\*/, render: (m, k) => <strong key={k} style={{ color:'var(--fg)', fontWeight:600 }}>{m[1]}</strong> },
+    { re: /`([^`]+)`/,      render: (m, k) => <code key={k} style={{ fontFamily:'var(--mono)', fontSize:'12px', color:'var(--accent)', background:'rgba(0,0,0,0.35)', padding:'1px 5px', borderRadius:'3px' }}>{m[1]}</code> },
+    { re: /\[\[([^\]]+)\]\]/, render: (m, k) => <span key={k} className="wikilink">[[{m[1]}]]</span> },
+  ];
+  const result = [];
+  let remaining = text;
+  let k = 0;
+  while (remaining.length > 0) {
+    let earliestIdx = Infinity, earliestMatch = null, earliestPattern = null;
+    for (const p of patterns) {
+      const m = p.re.exec(remaining);
+      if (m && m.index < earliestIdx) { earliestIdx = m.index; earliestMatch = m; earliestPattern = p; }
+    }
+    if (!earliestPattern) { result.push(<span key={k++}>{remaining}</span>); break; }
+    if (earliestIdx > 0) result.push(<span key={k++}>{remaining.slice(0, earliestIdx)}</span>);
+    result.push(earliestPattern.render(earliestMatch, k++));
+    remaining = remaining.slice(earliestIdx + earliestMatch[0].length);
+  }
+  return result;
+}
+
+function renderMd(text) {
+  if (!text?.trim()) return null;
+  const out = [];
+  let i = 0;
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    i++;
+    if (!line || line === '---') continue;
+    if (line.startsWith('# ')) continue; // skip LLM title lines
+    if (line.startsWith('### ')) {
+      out.push(
+        <div key={i} style={{ fontFamily:'var(--mono)', fontSize:'10px', color:'var(--fg-soft)', letterSpacing:'0.1em', textTransform:'uppercase', marginTop:'1.25rem', marginBottom:'0.5rem', paddingTop:'0.75rem', borderTop:'1px solid var(--border)' }}>
+          {line.slice(4)}
+        </div>
+      );
+    } else if (/^\d+\. /.test(line)) {
+      const num = line.match(/^(\d+)/)[1];
+      out.push(
+        <div key={i} style={{ display:'flex', gap:'0.6rem', marginBottom:'0.5rem', alignItems:'flex-start' }}>
+          <span style={{ fontFamily:'var(--mono)', fontSize:'11px', color:'var(--fg-soft)', flexShrink:0, paddingTop:'3px', minWidth:'18px' }}>{num}.</span>
+          <span style={{ fontSize:'14px', lineHeight:'1.6' }}>{renderInline(line.replace(/^\d+\. /, ''))}</span>
+        </div>
+      );
+    } else if (line.startsWith('- ')) {
+      const content = line.slice(2);
+      const isOk = /:\s*OK\b/i.test(content) || /^none identified/i.test(content);
+      const isIndented = raw.startsWith('   ') || raw.startsWith('  ');
+      out.push(
+        <div key={i} style={{ display:'flex', gap:'0.5rem', marginBottom:'4px', paddingLeft: isIndented ? '1.25rem' : 0, alignItems:'flex-start' }}>
+          <span style={{ color: isOk ? '#8fbc8f' : 'var(--fg-soft)', flexShrink:0, marginTop:'6px', fontSize:'7px' }}>●</span>
+          <span style={{ fontSize:'14px', lineHeight:'1.6', color: isOk ? '#8fbc8f' : 'var(--fg)' }}>{renderInline(content)}</span>
+        </div>
+      );
+    } else {
+      out.push(
+        <p key={i} style={{ fontSize:'14px', color:'var(--fg-soft)', marginBottom:'0.4rem', lineHeight:'1.6' }}>
+          {renderInline(line)}
+        </p>
+      );
+    }
+  }
+  return out.length > 0 ? out : null;
+}
+
+function MechanicalChecks({ content }) {
   if (!content?.trim()) return null;
+  const lines = content.split('\n').filter(l => l.trim().startsWith('- '));
   return (
-    <div style={{ marginBottom:'1rem', borderBottom:'1px solid var(--border)' }}>
+    <div style={{ display:'flex', flexDirection:'column', gap:'4px', marginBottom:'1.5rem' }}>
+      {lines.map((line, i) => {
+        const text  = line.replace(/^- /, '').trim();
+        const isOk  = /:\s*OK\b/i.test(text);
+        const colon = text.indexOf(':');
+        const label = colon >= 0 ? text.slice(0, colon) : text;
+        const detail = colon >= 0 ? text.slice(colon + 1).trim() : '';
+        return (
+          <div key={i} style={{ display:'flex', alignItems:'center', gap:'0.75rem', padding:'0.4rem 0.75rem', background:'var(--bg-row)', borderRadius:'3px' }}>
+            <span style={{ fontFamily:'var(--mono)', fontSize:'11px', color: isOk ? '#8fbc8f' : 'var(--warn)', flexShrink:0, width:'12px', textAlign:'center' }}>{isOk ? '✓' : '✕'}</span>
+            <span style={{ fontFamily:'var(--mono)', fontSize:'11px', color:'var(--fg-soft)', minWidth:'160px', flexShrink:0 }}>{label}</span>
+            <span style={{ fontSize:'12px', color: isOk ? 'var(--fg-soft)' : 'var(--warn)' }}>{detail}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function LintDomainCard({ label, graph, topology, content, growth }) {
+  const [open, setOpen] = React.useState(false);
+  const sections = [
+    { key:'graph',    title:'Graph Health',       text: graph },
+    { key:'topology', title:'Topology Health',    text: topology },
+    { key:'content',  title:'Content Health',     text: content },
+    { key:'growth',   title:'Growth Suggestions', text: growth },
+  ].filter(s => s.text);
+
+  return (
+    <div style={{ border:'1px solid var(--border)', borderRadius:'4px', marginBottom:'8px', overflow:'hidden' }}>
       <button
-        style={{ width:'100%', textAlign:'left', padding:'0.5rem 0', background:'none', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
+        style={{ width:'100%', textAlign:'left', padding:'0.65rem 1rem', background: open ? 'var(--bg-panel,#1a1a18)' : 'var(--bg-row)', border:'none', cursor:'pointer', display:'flex', justifyContent:'space-between', alignItems:'center' }}
         onClick={() => setOpen(o => !o)}
       >
-        <span className="panel-kicker">{title}</span>
-        <span className="mono" style={{ fontSize:'10px', color:'var(--fg-soft)' }}>{open ? '▲' : '▼'}</span>
+        <span className="mono-label">{label.toUpperCase()}</span>
+        <div style={{ display:'flex', alignItems:'center', gap:'0.75rem' }}>
+          <span style={{ fontSize:'10px', color:'var(--fg-soft)', fontFamily:'var(--mono)' }}>{sections.length} sections</span>
+          <span style={{ fontSize:'10px', color:'var(--fg-soft)', fontFamily:'var(--mono)' }}>{open ? '▲' : '▼'}</span>
+        </div>
       </button>
       {open && (
-        <pre style={{ fontFamily:'var(--mono)', fontSize:'11px', color:'var(--fg-soft)', whiteSpace:'pre-wrap', lineHeight:'1.6', padding:'0.5rem 0 1rem' }}>
-          {content.trim()}
-        </pre>
+        <div style={{ padding:'1.25rem 1.5rem 1.75rem', borderTop:'1px solid var(--border)' }}>
+          {sections.map((s, idx) => (
+            <div key={s.key} style={{ marginTop: idx > 0 ? '2rem' : 0 }}>
+              <div className="panel-kicker" style={{ marginBottom:'0.75rem' }}>{s.title}</div>
+              {renderMd(s.text)}
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
@@ -524,7 +629,7 @@ function InspectionView() {
   const recentCompile = data?.recentCompile || [];
   const rawQueue      = data?.rawQueue      || [];
   const hooks         = data?.hooks         || [];
-  const lintSections  = data?.lintSections  || {};
+  const lintSections  = data?.lintSections  || { mechanical:'', domains:[], crossDomain:'' };
   const failCount     = data?.failCount     || 0;
   const warnCount     = data?.warnCount     || 0;
 
@@ -777,25 +882,34 @@ function InspectionView() {
           {/* ── LINT sub-tab ── */}
           {subTab === 'lint' && (
             <div>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'1rem' }}>
-                <div className="panel-kicker">LINT REPORT · {data?.lintDate || '—'}</div>
-                <div className="hooks-grid" style={{ flexWrap:'wrap', gap:'4px' }}>
-                  {hooks.map(h => (
-                    <div key={h.name} className={`hook-cell hook-${h.status}`} style={{ padding:'4px 8px' }}>
-                      <div className="hook-status-dot" />
-                      <div className="hook-name mono" style={{ fontSize:'10px' }}>{h.name}</div>
-                      <div className="hook-note" style={{ fontSize:'10px' }}>{h.note}</div>
-                    </div>
+              <div className="panel-kicker" style={{ marginBottom:'1.25rem' }}>LINT REPORT · {data?.lintDate || '—'}</div>
+
+              {lintSections.mechanical && (
+                <>
+                  <div className="mono-label" style={{ marginBottom:'0.5rem' }}>MECHANICAL</div>
+                  <MechanicalChecks content={lintSections.mechanical} />
+                </>
+              )}
+
+              {lintSections.domains && lintSections.domains.length > 0 && (
+                <>
+                  <div className="mono-label" style={{ marginBottom:'0.75rem' }}>DOMAINS · {lintSections.domains.length}</div>
+                  {lintSections.domains.map((d, i) => (
+                    <LintDomainCard key={i} {...d} />
                   ))}
-                </div>
-              </div>
-              <LintSection title="MECHANICAL CHECKS"  content={lintSections.mechanical} />
-              <LintSection title="GRAPH HEALTH"       content={lintSections.graph} />
-              <LintSection title="TOPOLOGY HEALTH"    content={lintSections.topology} />
-              <LintSection title="CONTENT HEALTH"     content={lintSections.content} />
-              <LintSection title="GROWTH SUGGESTIONS" content={lintSections.growth} />
-              <LintSection title="PENDING FIXES"      content={lintSections.fixes} />
-              {!Object.values(lintSections).some(v => v) && (
+                </>
+              )}
+
+              {lintSections.crossDomain && (
+                <>
+                  <div className="mono-label" style={{ marginTop:'1.5rem', marginBottom:'0.75rem' }}>CROSS-DOMAIN</div>
+                  <div style={{ padding:'1.25rem 1.5rem', border:'1px solid var(--border)', borderRadius:'4px' }}>
+                    {renderMd(lintSections.crossDomain)}
+                  </div>
+                </>
+              )}
+
+              {(!lintSections.domains || lintSections.domains.length === 0) && !lintSections.mechanical && (
                 <div style={{ color:'var(--fg-soft)', fontFamily:'var(--mono)', fontSize:'12px' }}>No lint report found. Run lint to populate.</div>
               )}
             </div>
