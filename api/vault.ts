@@ -77,6 +77,47 @@ async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promis
   res.status(200).json({ text: data.text })
 }
 
+async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const apiKey = process.env.OPENAI_API_KEY
+  if (!apiKey) { res.status(500).json({ error: 'OPENAI_API_KEY not configured' }); return }
+
+  const { image, mimeType } = req.body as { image: string; mimeType: string }
+  if (!image || !mimeType) { res.status(400).json({ error: 'Missing image or mimeType' }); return }
+
+  const ocrRes = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      Authorization:  `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: [{
+        role: 'user',
+        content: [
+          {
+            type: 'text',
+            text: 'Extract all text from this image exactly as written. If the image contains no text, describe what you see in one sentence. Return only the extracted content, no preamble.',
+          },
+          {
+            type:      'image_url',
+            image_url: { url: `data:${mimeType};base64,${image}`, detail: 'low' },
+          },
+        ],
+      }],
+      max_tokens: 1000,
+    }),
+  })
+
+  if (!ocrRes.ok) {
+    console.error('OCR error:', await ocrRes.text())
+    res.status(502).json({ error: 'Image extraction failed' }); return
+  }
+
+  const data = await ocrRes.json() as { choices: { message: { content: string } }[] }
+  res.status(200).json({ text: data.choices[0].message.content })
+}
+
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (req.method === 'OPTIONS') return res.status(200).end()
 
@@ -93,6 +134,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (action === 'transcribe') {
       try { await handleTranscribe(req, res) } catch (e) { res.status(500).json({ error: String(e) }) }
+      return
+    }
+    if (action === 'ocr') {
+      try { await handleOcr(req, res) } catch (e) { res.status(500).json({ error: String(e) }) }
       return
     }
     return res.status(400).json({ error: 'unknown action' })

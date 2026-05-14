@@ -51,15 +51,16 @@ function MobileApp() {
 // ─── Capture ─────────────────────────────────────────────────────────────────
 
 function CaptureTab({ text, setText, project, setProject }) {
-  const DOMAINS = ['general', 'hiking', 'teaching', 'apex', 'tcx', 'knowledge-work', 'novel'];
+  const DOMAINS = ['general', 'hiking', 'teaching', 'apex', 'tcx', 'knowledge-work', 'novel', 'vault'];
 
-  const [status,    setStatus]    = React.useState('idle'); // idle | recording | transcribing | submitting | ok | error | offline
+  const [status,    setStatus]    = React.useState('idle'); // idle | recording | transcribing | capturing | submitting | ok | error | offline
   const [errorMsg,  setErrorMsg]  = React.useState('');
   const [recording, setRecording] = React.useState(false);
 
   const mediaRecorderRef = React.useRef(null);
   const chunksRef        = React.useRef([]);
   const holdTimerRef     = React.useRef(null);
+  const fileInputRef     = React.useRef(null);
 
   const isIdea    = /^idea[.:]\s*/i.test(text.trim());
   const routeDest = isIdea ? 'raw/general/ideas/' : `raw/${project}/`;
@@ -134,6 +135,36 @@ function CaptureTab({ text, setText, project, setProject }) {
     if (recording) stopRecording();
   };
 
+  // ── Picture ──────────────────────────────────────────────────────────────────
+
+  const onPictureChange = async e => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    e.target.value = '';
+    setErrorMsg('');
+    setStatus('capturing');
+    try {
+      const base64 = await new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const res = await fetch('/api/vault?action=ocr', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ image: base64, mimeType: file.type }),
+      });
+      if (!res.ok) throw new Error('OCR failed');
+      const { text: extracted } = await res.json();
+      setText(prev => prev ? prev + '\n\n' + extracted : extracted);
+      setStatus('idle');
+    } catch {
+      setStatus(navigator.onLine ? 'error' : 'offline');
+      setErrorMsg(navigator.onLine ? 'Image extraction failed — try again' : 'No connection — image not processed');
+    }
+  };
+
   // ── Commit ───────────────────────────────────────────────────────────────────
 
   const commit = async () => {
@@ -202,31 +233,65 @@ function CaptureTab({ text, setText, project, setProject }) {
         <span className="m-route-dest">{routeDest}</span>
       </div>
 
-      {/* Hold-to-record mic button */}
-      <div
-        onPointerDown={onVoiceStart}
-        onPointerUp={onVoiceEnd}
-        onPointerLeave={onVoiceEnd}
-        style={{
-          display:           'inline-flex',
-          alignItems:        'center',
-          gap:               6,
-          padding:           '6px 12px',
-          marginBottom:      8,
-          borderRadius:      8,
-          border:            `1px solid ${recording ? '#ff3c3c' : 'var(--border, #2e2e2e)'}`,
-          background:        recording ? 'rgba(255,60,60,0.12)' : 'transparent',
-          userSelect:        'none',
-          WebkitUserSelect:  'none',
-          cursor:            'pointer',
-          transition:        'all 0.15s',
-          fontSize:          12,
-          fontFamily:        'monospace',
-          color:             recording ? '#ff3c3c' : 'var(--text-muted, #8a8f98)',
-        }}
-      >
-        <span>{status === 'transcribing' ? '⟳' : recording ? '●' : '🎤'}</span>
-        <span>{recording ? 'release to stop' : status === 'transcribing' ? 'reading…' : 'hold to record'}</span>
+      {/* Input controls row */}
+      <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+        {/* Hold-to-record mic button */}
+        <div
+          onPointerDown={onVoiceStart}
+          onPointerUp={onVoiceEnd}
+          onPointerLeave={onVoiceEnd}
+          style={{
+            display:           'inline-flex',
+            alignItems:        'center',
+            gap:               6,
+            padding:           '6px 12px',
+            borderRadius:      8,
+            border:            `1px solid ${recording ? '#ff3c3c' : 'var(--border, #2e2e2e)'}`,
+            background:        recording ? 'rgba(255,60,60,0.12)' : 'transparent',
+            userSelect:        'none',
+            WebkitUserSelect:  'none',
+            cursor:            'pointer',
+            transition:        'all 0.15s',
+            fontSize:          12,
+            fontFamily:        'monospace',
+            color:             recording ? '#ff3c3c' : 'var(--text-muted, #8a8f98)',
+          }}
+        >
+          <span>{status === 'transcribing' ? '⟳' : recording ? '●' : '🎤'}</span>
+          <span>{recording ? 'release to stop' : status === 'transcribing' ? 'reading…' : 'hold to record'}</span>
+        </div>
+
+        {/* Picture capture button */}
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          style={{
+            display:           'inline-flex',
+            alignItems:        'center',
+            gap:               6,
+            padding:           '6px 12px',
+            borderRadius:      8,
+            border:            `1px solid ${status === 'capturing' ? 'var(--accent, #c8a96e)' : 'var(--border, #2e2e2e)'}`,
+            background:        status === 'capturing' ? 'rgba(200,169,110,0.12)' : 'transparent',
+            userSelect:        'none',
+            WebkitUserSelect:  'none',
+            cursor:            status === 'capturing' ? 'default' : 'pointer',
+            transition:        'all 0.15s',
+            fontSize:          12,
+            fontFamily:        'monospace',
+            color:             status === 'capturing' ? 'var(--accent, #c8a96e)' : 'var(--text-muted, #8a8f98)',
+          }}
+        >
+          <span>{status === 'capturing' ? '⟳' : '📷'}</span>
+          <span>{status === 'capturing' ? 'reading…' : 'add image'}</span>
+        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          style={{ display: 'none' }}
+          onChange={onPictureChange}
+        />
       </div>
 
       <textarea
@@ -235,13 +300,13 @@ function CaptureTab({ text, setText, project, setProject }) {
         value={text}
         onChange={e => { setText(e.target.value); setStatus('idle'); setErrorMsg(''); }}
         rows={7}
-        disabled={status === 'recording' || status === 'transcribing'}
+        disabled={status === 'recording' || status === 'transcribing' || status === 'capturing'}
       />
 
       <button
         className="m-btn-primary"
         onClick={commit}
-        disabled={!text.trim() || status === 'submitting' || status === 'recording' || status === 'transcribing'}
+        disabled={!text.trim() || status === 'submitting' || status === 'recording' || status === 'transcribing' || status === 'capturing'}
       >
         {commitLabel}
       </button>
