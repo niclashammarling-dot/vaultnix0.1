@@ -126,6 +126,7 @@ function CaptureTab({ text, setText, project, setProject }) {
 
   const onVoiceStart = e => {
     e.preventDefault();
+    if (status === 'capturing' || status === 'submitting') return;
     holdTimerRef.current = setTimeout(startRecording, 150);
   };
 
@@ -143,6 +144,7 @@ function CaptureTab({ text, setText, project, setProject }) {
     e.target.value = '';
     setErrorMsg('');
     setStatus('capturing');
+    const mimeType = file.type || 'image/jpeg';
     try {
       const base64 = await new Promise((resolve, reject) => {
         const reader = new FileReader();
@@ -153,7 +155,7 @@ function CaptureTab({ text, setText, project, setProject }) {
       const res = await fetch('/api/vault?action=ocr', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ image: base64, mimeType: file.type }),
+        body:    JSON.stringify({ image: base64, mimeType }),
       });
       if (!res.ok) throw new Error('OCR failed');
       const { text: extracted } = await res.json();
@@ -263,7 +265,7 @@ function CaptureTab({ text, setText, project, setProject }) {
 
         {/* Picture capture button */}
         <div
-          onClick={() => fileInputRef.current?.click()}
+          onClick={() => { if (status === 'idle' || status === 'ok') fileInputRef.current?.click(); }}
           style={{
             display:           'inline-flex',
             alignItems:        'center',
@@ -288,7 +290,6 @@ function CaptureTab({ text, setText, project, setProject }) {
           ref={fileInputRef}
           type="file"
           accept="image/*"
-          capture="environment"
           style={{ display: 'none' }}
           onChange={onPictureChange}
         />

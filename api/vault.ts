@@ -101,11 +101,11 @@ async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void>
           },
           {
             type:      'image_url',
-            image_url: { url: `data:${mimeType};base64,${image}`, detail: 'low' },
+            image_url: { url: `data:${mimeType};base64,${image}`, detail: 'high' },
           },
         ],
       }],
-      max_tokens: 1000,
+      max_tokens: 2000,
     }),
   })
 
