@@ -120,16 +120,26 @@ async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void>
     const text = ollamaModel
       ? await ocrViaOllama(image, ollamaModel)
       : await ocrViaOpenAI(image, mimeType, process.env.OPENAI_API_KEY ?? '')
+    res.status(200).json({ text })
+  } catch (e) {
+    console.error('OCR error:', e)
+    res.status(502).json({ error: 'Image extraction failed' })
+  }
+}
 
+async function handleSaveImage(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const { image } = req.body as { image: string }
+  if (!image) { res.status(400).json({ error: 'Missing image' }); return }
+
+  try {
     const now = new Date()
     const month = now.toISOString().slice(0, 7)
     const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, (c) => c === 'T' ? '-' : c)
     const imagePath = await commitRawBinary(`${stamp}-capture.jpg`, image, `assets/${month}`)
-
-    res.status(200).json({ text, imagePath })
+    res.status(200).json({ imagePath })
   } catch (e) {
-    console.error('OCR error:', e)
-    res.status(502).json({ error: 'Image extraction failed' })
+    console.error('Save image error:', e)
+    res.status(502).json({ error: 'Image save failed' })
   }
 }
 
@@ -153,6 +163,10 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     }
     if (action === 'ocr') {
       try { await handleOcr(req, res) } catch (e) { res.status(500).json({ error: String(e) }) }
+      return
+    }
+    if (action === 'save-image') {
+      try { await handleSaveImage(req, res) } catch (e) { res.status(500).json({ error: String(e) }) }
       return
     }
     return res.status(400).json({ error: 'unknown action' })

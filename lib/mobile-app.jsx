@@ -53,9 +53,10 @@ function MobileApp() {
 function CaptureTab({ text, setText, project, setProject }) {
   const DOMAINS = ['general', 'hiking', 'teaching', 'apex', 'tcx', 'knowledge-work', 'novel', 'vault'];
 
-  const [status,    setStatus]    = React.useState('idle'); // idle | recording | transcribing | capturing | submitting | ok | error | offline
-  const [errorMsg,  setErrorMsg]  = React.useState('');
-  const [recording, setRecording] = React.useState(false);
+  const [status,       setStatus]       = React.useState('idle'); // idle | recording | transcribing | image-pending | capturing | submitting | ok | error | offline
+  const [errorMsg,     setErrorMsg]     = React.useState('');
+  const [recording,    setRecording]    = React.useState(false);
+  const [pendingImage, setPendingImage] = React.useState(null); // base64 string held between pick and action choice
 
   const mediaRecorderRef  = React.useRef(null);
   const chunksRef         = React.useRef([]);
@@ -183,19 +184,57 @@ function CaptureTab({ text, setText, project, setProject }) {
     setStatus('capturing');
     try {
       const base64 = await resizeImage(file);
+      setPendingImage(base64);
+      setStatus('image-pending');
+    } catch {
+      setStatus('error');
+      setErrorMsg('Could not load image');
+    }
+  };
+
+  const discardPendingImage = () => {
+    setPendingImage(null);
+    setStatus('idle');
+    setErrorMsg('');
+  };
+
+  const stripText = async () => {
+    if (!pendingImage) return;
+    setStatus('capturing');
+    try {
       const res = await fetch('/api/vault?action=ocr', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
+        body:    JSON.stringify({ image: pendingImage, mimeType: 'image/jpeg' }),
       });
       if (!res.ok) throw new Error('OCR failed');
-      const { text: extracted, imagePath } = await res.json();
-      const imageRef = imagePath ? `\n\n![](./${imagePath})` : '';
-      setText(prev => prev ? prev + '\n\n' + extracted + imageRef : extracted + imageRef);
+      const { text: extracted } = await res.json();
+      setText(prev => prev ? prev + '\n\n' + extracted : extracted);
+      setPendingImage(null);
       setStatus('idle');
     } catch {
       setStatus(navigator.onLine ? 'error' : 'offline');
       setErrorMsg(navigator.onLine ? 'Image extraction failed — try again' : 'No connection — image not processed');
+    }
+  };
+
+  const saveImage = async () => {
+    if (!pendingImage) return;
+    setStatus('capturing');
+    try {
+      const res = await fetch('/api/vault?action=save-image', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({ image: pendingImage }),
+      });
+      if (!res.ok) throw new Error('Save failed');
+      const { imagePath } = await res.json();
+      setText(prev => prev ? prev + `\n\n![](./${imagePath})` : `![](./${imagePath})`);
+      setPendingImage(null);
+      setStatus('idle');
+    } catch {
+      setStatus(navigator.onLine ? 'error' : 'offline');
+      setErrorMsg(navigator.onLine ? 'Image save failed — try again' : 'No connection — image not saved');
     }
   };
 
@@ -308,7 +347,7 @@ function CaptureTab({ text, setText, project, setProject }) {
             background:        status === 'capturing' ? 'rgba(200,169,110,0.12)' : 'transparent',
             userSelect:        'none',
             WebkitUserSelect:  'none',
-            cursor:            status === 'capturing' ? 'default' : 'pointer',
+            cursor:            (status === 'capturing' || status === 'image-pending') ? 'default' : 'pointer',
             transition:        'all 0.15s',
             fontSize:          12,
             fontFamily:        'monospace',
@@ -327,13 +366,26 @@ function CaptureTab({ text, setText, project, setProject }) {
         />
       </div>
 
+      {/* Image action choice */}
+      {status === 'image-pending' && (
+        <div style={{ display: 'flex', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+          <span style={{ fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted, #8a8f98)' }}>image ready —</span>
+          <button className="m-btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={stripText}>strip text</button>
+          <button className="m-btn-ghost" style={{ fontSize: 12, padding: '4px 10px' }} onClick={saveImage}>save image</button>
+          <button
+            onClick={discardPendingImage}
+            style={{ marginLeft: 'auto', fontSize: 11, fontFamily: 'monospace', color: 'var(--text-muted, #8a8f98)', background: 'none', border: 'none', cursor: 'pointer' }}
+          >discard</button>
+        </div>
+      )}
+
       <textarea
         className="m-textarea"
         placeholder={"What happened? Decision? Open question?\n\nStart with 'idea.' to route to ideas."}
         value={text}
-        onChange={e => { setText(e.target.value); setStatus('idle'); setErrorMsg(''); }}
+        onChange={e => { setText(e.target.value); setPendingImage(null); setStatus('idle'); setErrorMsg(''); }}
         rows={7}
-        disabled={status === 'recording' || status === 'transcribing' || status === 'capturing'}
+        disabled={status === 'recording' || status === 'transcribing' || status === 'capturing' || status === 'image-pending'}
       />
 
       <button
