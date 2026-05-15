@@ -77,45 +77,54 @@ async function handleTranscribe(req: VercelRequest, res: VercelResponse): Promis
   res.status(200).json({ text: data.text })
 }
 
-async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) { res.status(500).json({ error: 'OPENAI_API_KEY not configured' }); return }
+const OCR_PROMPT = 'Extract all text from this image exactly as written. If the image contains no text, describe what you see in one sentence. Return only the extracted content, no preamble.'
 
-  const { image, mimeType } = req.body as { image: string; mimeType: string }
-  if (!image || !mimeType) { res.status(400).json({ error: 'Missing image or mimeType' }); return }
+async function ocrViaOllama(image: string, model: string): Promise<string> {
+  const res = await fetch('http://localhost:11434/api/generate', {
+    method:  'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model, prompt: OCR_PROMPT, images: [image], stream: false }),
+  })
+  if (!res.ok) throw new Error(`Ollama error: ${res.status}`)
+  const data = await res.json() as { response: string }
+  return data.response
+}
 
-  const ocrRes = await fetch('https://api.openai.com/v1/chat/completions', {
+async function ocrViaOpenAI(image: string, mimeType: string, apiKey: string): Promise<string> {
+  const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: {
-      Authorization:  `Bearer ${apiKey}`,
-      'Content-Type': 'application/json',
-    },
+    headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model: 'gpt-4o-mini',
       messages: [{
         role: 'user',
         content: [
-          {
-            type: 'text',
-            text: 'Extract all text from this image exactly as written. If the image contains no text, describe what you see in one sentence. Return only the extracted content, no preamble.',
-          },
-          {
-            type:      'image_url',
-            image_url: { url: `data:${mimeType};base64,${image}`, detail: 'high' },
-          },
+          { type: 'text', text: OCR_PROMPT },
+          { type: 'image_url', image_url: { url: `data:${mimeType};base64,${image}`, detail: 'high' } },
         ],
       }],
       max_tokens: 2000,
     }),
   })
+  if (!res.ok) throw new Error(`OpenAI error: ${res.status}`)
+  const data = await res.json() as { choices: { message: { content: string } }[] }
+  return data.choices[0].message.content
+}
 
-  if (!ocrRes.ok) {
-    console.error('OCR error:', await ocrRes.text())
-    res.status(502).json({ error: 'Image extraction failed' }); return
+async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void> {
+  const { image, mimeType } = req.body as { image: string; mimeType: string }
+  if (!image || !mimeType) { res.status(400).json({ error: 'Missing image or mimeType' }); return }
+
+  const ollamaModel = process.env.OLLAMA_OCR_MODEL
+  try {
+    const text = ollamaModel
+      ? await ocrViaOllama(image, ollamaModel)
+      : await ocrViaOpenAI(image, mimeType, process.env.OPENAI_API_KEY ?? '')
+    res.status(200).json({ text })
+  } catch (e) {
+    console.error('OCR error:', e)
+    res.status(502).json({ error: 'Image extraction failed' })
   }
-
-  const data = await ocrRes.json() as { choices: { message: { content: string } }[] }
-  res.status(200).json({ text: data.choices[0].message.content })
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {

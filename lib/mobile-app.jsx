@@ -57,10 +57,12 @@ function CaptureTab({ text, setText, project, setProject }) {
   const [errorMsg,  setErrorMsg]  = React.useState('');
   const [recording, setRecording] = React.useState(false);
 
-  const mediaRecorderRef = React.useRef(null);
-  const chunksRef        = React.useRef([]);
-  const holdTimerRef     = React.useRef(null);
-  const fileInputRef     = React.useRef(null);
+  const mediaRecorderRef  = React.useRef(null);
+  const chunksRef         = React.useRef([]);
+  const holdTimerRef      = React.useRef(null);
+  const fileInputRef      = React.useRef(null);
+  const recLimitTimerRef  = React.useRef(null);
+  const MAX_RECORD_MS     = 90_000;
 
   const isIdea    = /^idea[.:]\s*/i.test(text.trim());
   const routeDest = isIdea ? 'raw/general/ideas/' : `raw/${project}/`;
@@ -86,6 +88,14 @@ function CaptureTab({ text, setText, project, setProject }) {
       mediaRecorderRef.current = mr;
       setRecording(true);
       setStatus('recording');
+      recLimitTimerRef.current = setTimeout(() => {
+        if (mediaRecorderRef.current?.state === 'recording') {
+          mediaRecorderRef.current.stop();
+          setRecording(false);
+          setStatus('transcribing');
+          setErrorMsg('Recording capped at 90s — transcribing');
+        }
+      }, MAX_RECORD_MS);
     } catch {
       setStatus('error');
       setErrorMsg('Microphone access denied');
@@ -93,6 +103,7 @@ function CaptureTab({ text, setText, project, setProject }) {
   };
 
   const stopRecording = () => {
+    clearTimeout(recLimitTimerRef.current);
     if (mediaRecorderRef.current?.state === 'recording') {
       mediaRecorderRef.current.stop();
       setRecording(false);
@@ -117,6 +128,7 @@ function CaptureTab({ text, setText, project, setProject }) {
       if (!res.ok) throw new Error('transcription failed');
       const { text: transcribed } = await res.json();
       setText(prev => prev ? prev + ' ' + transcribed : transcribed);
+      setErrorMsg('');
       setStatus('idle');
     } catch {
       setStatus(navigator.onLine ? 'error' : 'offline');
@@ -138,24 +150,43 @@ function CaptureTab({ text, setText, project, setProject }) {
 
   // ── Picture ──────────────────────────────────────────────────────────────────
 
+  const resizeImage = (file) => new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1024;
+      const scale = Math.min(1, MAX / Math.max(img.width, img.height));
+      const w = Math.round(img.width  * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width  = w;
+      canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      canvas.toBlob(blob => {
+        if (!blob) { reject(new Error('canvas toBlob failed')); return; }
+        const reader = new FileReader();
+        reader.onload  = () => resolve(reader.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      }, 'image/jpeg', 0.82);
+    };
+    img.onerror = reject;
+    img.src = url;
+  });
+
   const onPictureChange = async e => {
     const file = e.target.files?.[0];
     if (!file) return;
     e.target.value = '';
     setErrorMsg('');
     setStatus('capturing');
-    const mimeType = file.type || 'image/jpeg';
     try {
-      const base64 = await new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload  = () => resolve(reader.result.split(',')[1]);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
+      const base64 = await resizeImage(file);
       const res = await fetch('/api/vault?action=ocr', {
         method:  'POST',
         headers: { 'Content-Type': 'application/json' },
-        body:    JSON.stringify({ image: base64, mimeType }),
+        body:    JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
       });
       if (!res.ok) throw new Error('OCR failed');
       const { text: extracted } = await res.json();

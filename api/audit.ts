@@ -7,8 +7,8 @@ const REPO            = process.env.GITHUB_REPO!
 const BRANCH          = process.env.GITHUB_BRANCH || 'master'
 const TOKEN           = process.env.GITHUB_TOKEN!
 
-const CORRECTIONS_PATH = 'raw/audit/corrections-log.ndjson'
-const COUNTER_PATH     = 'raw/audit/hook-counter.json'
+const CORRECTIONS_PATH = 'Vault/data/corrections-log.ndjson'
+const COUNTER_PATH     = 'Vault/data/hook-counter.json'
 
 const ghHeaders = () => ({
   'Authorization': `Bearer ${TOKEN}`,
