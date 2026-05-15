@@ -1,5 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
-import { getIndex } from './_lib/github'
+import { getIndex, commitRawBinary } from './_lib/github'
 
 const VAULT_OWNER = process.env.GITHUB_OWNER!
 const VAULT_REPO  = process.env.GITHUB_REPO!
@@ -120,7 +120,13 @@ async function handleOcr(req: VercelRequest, res: VercelResponse): Promise<void>
     const text = ollamaModel
       ? await ocrViaOllama(image, ollamaModel)
       : await ocrViaOpenAI(image, mimeType, process.env.OPENAI_API_KEY ?? '')
-    res.status(200).json({ text })
+
+    const now = new Date()
+    const month = now.toISOString().slice(0, 7)
+    const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, (c) => c === 'T' ? '-' : c)
+    const imagePath = await commitRawBinary(`${stamp}-capture.jpg`, image, `assets/${month}`)
+
+    res.status(200).json({ text, imagePath })
   } catch (e) {
     console.error('OCR error:', e)
     res.status(502).json({ error: 'Image extraction failed' })

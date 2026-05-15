@@ -189,8 +189,9 @@ function CaptureTab({ text, setText, project, setProject }) {
         body:    JSON.stringify({ image: base64, mimeType: 'image/jpeg' }),
       });
       if (!res.ok) throw new Error('OCR failed');
-      const { text: extracted } = await res.json();
-      setText(prev => prev ? prev + '\n\n' + extracted : extracted);
+      const { text: extracted, imagePath } = await res.json();
+      const imageRef = imagePath ? `\n\n![](./${imagePath})` : '';
+      setText(prev => prev ? prev + '\n\n' + extracted + imageRef : extracted + imageRef);
       setStatus('idle');
     } catch {
       setStatus(navigator.onLine ? 'error' : 'offline');

@@ -166,6 +166,27 @@ export async function commitRawNote(filename: string, content: string, domain = 
   }
 }
 
+export async function commitRawBinary(filename: string, base64Content: string, domain = 'general'): Promise<string> {
+  const path = `raw/${domain}/${filename}`
+  const res = await fetch(
+    `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${path}`,
+    {
+      method: 'PUT',
+      headers: { ...headers(), 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        message: `capture: ${filename}`,
+        content: base64Content,
+        branch: BRANCH,
+      }),
+    }
+  )
+  if (!res.ok) {
+    const err = await res.json() as { message: string }
+    throw new Error(`Commit failed: ${err.message}`)
+  }
+  return path
+}
+
 function chunk<T>(arr: T[], size: number): T[][] {
   return Array.from({ length: Math.ceil(arr.length / size) }, (_, i) =>
     arr.slice(i * size, i * size + size)
