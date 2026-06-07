@@ -25,7 +25,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     fileDomain = 'inbox/ideas'
     filename = `${date}-${time}-idea.md`
     const title = body.split('\n')[0].slice(0, 80)
-    markdown = `---\ntitle: ${title}\ntype: idea\nproject: general/ideas\ndate: ${date}\nstatus: captured\n---\n\n${body}\n`
+    markdown = `---\ntitle: ${title}\ntype: idea\nproject: general/ideas\ndate: ${date}\nstatus: captured\ncompiled: false\n---\n\n${body}\n`
   } else {
     const project = domain || 'general'
     const month = date.slice(0, 7)
