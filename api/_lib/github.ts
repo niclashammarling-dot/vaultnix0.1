@@ -150,7 +150,9 @@ function assertRawPath(domain: string, filename: string): string {
   if (!/^[A-Za-z0-9._-]+$/.test(filename) || filename.startsWith('.')) {
     throw new Error(`Refusing filename with unsafe characters: ${filename}`)
   }
-  if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(domain)) {
+  // Domain charset has no '.', so '.' / '..' segments already fail the regex;
+  // the explicit check keeps the traversal reject legible and regex-independent.
+  if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(domain) || domain.split('/').some((s) => s === '.' || s === '..')) {
     throw new Error(`Refusing domain path: ${domain}`)
   }
   return `raw/${domain}/${filename}`
