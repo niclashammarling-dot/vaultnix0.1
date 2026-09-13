@@ -144,8 +144,20 @@ export async function deleteFile(path: string, sha: string, message: string): Pr
   }
 }
 
+// Producer-side gate: both 2026-09-13 defects (colon in a filename, note-relative
+// asset path) reached master because nothing checked what the interface commits.
+function assertRawPath(domain: string, filename: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(filename) || filename.startsWith('.')) {
+    throw new Error(`Refusing filename with unsafe characters: ${filename}`)
+  }
+  if (!/^[A-Za-z0-9_-]+(\/[A-Za-z0-9_-]+)*$/.test(domain)) {
+    throw new Error(`Refusing domain path: ${domain}`)
+  }
+  return `raw/${domain}/${filename}`
+}
+
 export async function commitRawNote(filename: string, content: string, domain = 'general'): Promise<void> {
-  const path = `raw/${domain}/${filename}`
+  const path = assertRawPath(domain, filename)
   const encoded = Buffer.from(content).toString('base64')
 
   const res = await fetch(
@@ -167,7 +179,7 @@ export async function commitRawNote(filename: string, content: string, domain = 
 }
 
 export async function commitRawBinary(filename: string, base64Content: string, domain = 'general'): Promise<string> {
-  const path = `raw/${domain}/${filename}`
+  const path = assertRawPath(domain, filename)
   const res = await fetch(
     `${GITHUB_API}/repos/${OWNER}/${REPO}/contents/${path}`,
     {

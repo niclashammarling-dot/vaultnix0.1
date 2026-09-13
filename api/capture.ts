@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { commitRawNote } from './_lib/github'
+import { captureStamp } from './_lib/stamp'
 
 const IDEA_PREFIX = /^idea[.:]\s*/i
 
@@ -13,9 +14,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const isIdea = IDEA_PREFIX.test(content.trim())
   const body = isIdea ? content.trim().replace(IDEA_PREFIX, '') : content
 
-  const now = new Date()
-  const date = now.toISOString().split('T')[0]
-  const time = now.toISOString().split('T')[1].slice(0, 8).replace(/:/g, '')
+  const { date, time, month } = captureStamp()
 
   let fileDomain: string
   let filename: string
@@ -28,7 +27,6 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     markdown = `---\ntitle: ${title}\ntype: idea\nproject: general/ideas\ndate: ${date}\nstatus: open\ncompiled: false\n---\n\n${body}\n`
   } else {
     const project = domain || 'general'
-    const month = date.slice(0, 7)
     fileDomain = `inbox/${month}`
     filename = `${date}-${time}-capture.md`
     markdown = `---\ntitle: Quick capture ${date}\ntype: capture\nproject: ${project}\ndate: ${date}\ntags: [${project}/capture]\nstatus: draft\ncompiled: false\n---\n\n## What We Worked On\n${body}\n\n## Decisions Made\n\n\n## Open Threads\n\n`

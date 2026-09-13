@@ -229,7 +229,7 @@ function CaptureTab({ text, setText, project, setProject }) {
       });
       if (!res.ok) throw new Error('Save failed');
       const { imagePath } = await res.json();
-      setText(prev => prev ? prev + `\n\n![](./${imagePath})` : `![](./${imagePath})`);
+      setText(prev => prev ? prev + `\n\n![](${imagePath})` : `![](${imagePath})`);
       setPendingImage(null);
       setStatus('idle');
     } catch {

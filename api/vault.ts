@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { getIndex, commitRawBinary } from './_lib/github'
+import { captureStamp } from './_lib/stamp'
 
 const VAULT_OWNER = process.env.GITHUB_OWNER!
 const VAULT_REPO  = process.env.GITHUB_REPO!
@@ -132,9 +133,9 @@ async function handleSaveImage(req: VercelRequest, res: VercelResponse): Promise
   if (!image) { res.status(400).json({ error: 'Missing image' }); return }
 
   try {
-    const now = new Date()
-    const month = now.toISOString().slice(0, 7)
-    const stamp = now.toISOString().slice(0, 19).replace(/[-:T]/g, (c) => c === 'T' ? '-' : c)
+    const { stamp, month } = captureStamp()
+    // Vault-root-relative (raw/assets/YYYY-MM/...): notes live in raw/inbox/YYYY-MM/,
+    // so a note-relative embed resolved to raw/inbox/YYYY-MM/raw/assets/... and broke.
     const imagePath = await commitRawBinary(`${stamp}-capture.jpg`, image, `assets/${month}`)
     res.status(200).json({ imagePath })
   } catch (e) {
